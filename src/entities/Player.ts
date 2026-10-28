@@ -1,11 +1,13 @@
 import * as THREE from 'three'
 import { PlayerVisual } from './PlayerVisual'
+import { CharacterStats } from '../core/CharacterStats'
+import { PLAYER_BASE_STATS } from '../config/player.config'
 
 export class Player {
   readonly root = new THREE.Group()
   readonly position = this.root.position
   readonly velocity = new THREE.Vector3()
-  readonly speed = 5.5
+  readonly stats = new CharacterStats(PLAYER_BASE_STATS)
   readonly radius = 0.43
   private readonly visual = new PlayerVisual()
   private readonly previousPosition = new THREE.Vector3()
@@ -21,9 +23,14 @@ export class Player {
     return this.root.rotation.y
   }
 
+  get speed(): number {
+    return this.stats.getStat('moveSpeed')
+  }
+
   update(direction: THREE.Vector3, deltaTime: number, obstacles: readonly THREE.Box2[]): void {
     this.previousPosition.copy(this.position)
-    const distance = this.speed * Math.max(deltaTime, 0)
+    const speed = this.speed
+    const distance = speed * Math.max(deltaTime, 0)
     const steps = Math.max(1, Math.ceil(distance / (this.radius * 0.5)))
     const stepX = direction.x * distance / steps
     const stepZ = direction.z * distance / steps
@@ -33,7 +40,7 @@ export class Player {
     }
     this.velocity.subVectors(this.position, this.previousPosition)
     if (deltaTime > 0) this.velocity.divideScalar(deltaTime)
-    this.visual.update(Math.max(deltaTime, 0), this.velocity.length() / this.speed)
+    this.visual.update(Math.max(deltaTime, 0), speed > 0 ? this.velocity.length() / speed : 0)
   }
 
   facePoint(point: THREE.Vector3): void {
