@@ -2,6 +2,7 @@ import * as THREE from 'three'
 
 export class World {
   readonly root = new THREE.Group()
+  private readonly solidObstacles: THREE.Box2[] = []
   private readonly geometries = new Set<THREE.BufferGeometry>()
   private readonly materials = new Set<THREE.Material>()
   private readonly textures = new Set<THREE.Texture>()
@@ -22,6 +23,19 @@ export class World {
     this.createBuilding(7, -9, 5, 5, 3.9, false, 'TRADING CO.', '#a47558')
     this.createBuilding(12, 4, 5, 5, 3.5, false, 'RELAY 07', '#617878')
     this.createProps()
+  }
+
+  get obstacles(): readonly THREE.Box2[] {
+    return this.solidObstacles
+  }
+
+  private addObstacle(object: THREE.Object3D): void {
+    object.updateWorldMatrix(true, true)
+    const bounds = new THREE.Box3().setFromObject(object)
+    this.solidObstacles.push(new THREE.Box2(
+      new THREE.Vector2(bounds.min.x, bounds.min.z),
+      new THREE.Vector2(bounds.max.x, bounds.max.z),
+    ))
   }
 
   private random(): number {
@@ -89,6 +103,7 @@ export class World {
       const radius = size * (1 - level * 0.15)
       this.mesh(new THREE.CylinderGeometry(radius * 0.8, radius, size * 0.28, 6), this.material(strata[level]), group, 0, size * (0.14 + level * 0.26), 0)
     }
+    this.addObstacle(group)
   }
 
   private createBuilding(positionX: number, positionZ: number, width: number, depth: number, height: number, saloon: boolean, name: string, color: string): void {
@@ -96,7 +111,8 @@ export class World {
     building.position.set(positionX, 0, positionZ)
     this.root.add(building)
     const wall = this.material(color)
-    this.box(building, this.rock, width + 0.3, 0.35, depth + 0.3, 0, 0.075, 0)
+    const foundation = this.box(building, this.rock, width + 0.3, 0.35, depth + 0.3, 0, 0.075, 0)
+    this.addObstacle(foundation)
     this.box(building, wall, width, height, depth, 0, height / 2 + 0.2, 0)
     const front = depth / 2 + 0.04
     for (let level = 0.65; level < height; level += 0.48) this.box(building, this.wood, width, 0.035, 0.035, 0, level, front)
@@ -125,7 +141,8 @@ export class World {
     }
     this.box(building, this.trim, width + 0.35, 0.24, 0.25, 0, height + 0.27, front + 0.12)
     const porchDepth = saloon ? 2 : 1.4
-    this.box(building, this.wood, width + 0.8, 0.22, porchDepth, 0, 0.24, front + porchDepth / 2)
+    const porch = this.box(building, this.wood, width + 0.8, 0.22, porchDepth, 0, 0.24, front + porchDepth / 2)
+    this.addObstacle(porch)
     for (let plank = -width / 2; plank <= width / 2; plank += 0.36) this.box(building, this.trim, 0.025, 0.015, porchDepth, plank, 0.358, front + porchDepth / 2)
     this.box(building, this.trim, 2.4, 0.16, 0.5, 0, 0.02, front + porchDepth + 0.23)
     this.box(building, roofMaterial, width + 0.9, 0.16, porchDepth + 0.4, 0, 3.35, front + porchDepth / 2)
@@ -176,7 +193,8 @@ export class World {
   }
 
   private createBarrel(positionX: number, positionZ: number): void {
-    this.mesh(new THREE.CylinderGeometry(0.37, 0.34, 0.95, 10), this.wood, this.root, positionX, 0.43, positionZ)
+    const barrel = this.mesh(new THREE.CylinderGeometry(0.37, 0.34, 0.95, 10), this.wood, this.root, positionX, 0.43, positionZ)
+    this.addObstacle(barrel)
     for (const height of [0.12, 0.72]) this.mesh(new THREE.CylinderGeometry(0.385, 0.385, 0.085, 10), this.metal, this.root, positionX, height, positionZ)
   }
 
@@ -186,7 +204,8 @@ export class World {
     group.scale.setScalar(scale)
     group.rotation.y = this.random() * Math.PI
     this.root.add(group)
-    this.mesh(new THREE.CapsuleGeometry(0.23, 1.8, 3, 7), this.cactus, group, 0, 1.05, 0)
+    const trunk = this.mesh(new THREE.CapsuleGeometry(0.23, 1.8, 3, 7), this.cactus, group, 0, 1.05, 0)
+    this.addObstacle(trunk)
     for (const side of [-1, 1]) {
       const height = side === -1 ? 0.85 : 1.4
       const arm = this.mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.65, 7), this.cactus, group, side * 0.35, height, 0)
@@ -196,7 +215,9 @@ export class World {
   }
 
   private createCrystalCluster(positionX: number, positionZ: number): void {
-    this.mesh(new THREE.DodecahedronGeometry(1.05, 0), this.rock, this.root, positionX, 0.1, positionZ).scale.set(1.5, 0.4, 1.1)
+    const base = this.mesh(new THREE.DodecahedronGeometry(1.05, 0), this.rock, this.root, positionX, 0.1, positionZ)
+    base.scale.set(1.5, 0.4, 1.1)
+    this.addObstacle(base)
     for (let index = 0; index < 5; index++) {
       const angle = index * 2.4
       const radius = index === 0 ? 0 : 0.65
@@ -226,6 +247,7 @@ export class World {
       const stone = this.mesh(stoneGeometry, this.rock, this.root, positionX, size * 0.23, positionZ)
       stone.scale.set(size * 1.4, size * 0.7, size)
       stone.rotation.set(this.random(), this.random() * Math.PI, 0)
+      if (size >= 0.55) this.addObstacle(stone)
       if (index % 3 === 0) {
         for (let blade = 0; blade < 4; blade++) {
           const grass = this.mesh(grassGeometry, grassMaterial, this.root, positionX + 0.6 + blade * 0.09, 0.2, positionZ)
@@ -234,7 +256,8 @@ export class World {
       }
     }
     for (const [positionX, positionZ] of [[-14, -2], [15, 10], [4, -4]]) {
-      this.box(this.root, this.trim, 0.9, 0.9, 0.9, positionX, 0.4, positionZ)
+      const crate = this.box(this.root, this.trim, 0.9, 0.9, 0.9, positionX, 0.4, positionZ)
+      this.addObstacle(crate)
       for (const offset of [-0.3, 0.3]) this.box(this.root, this.wood, 0.09, 0.94, 0.94, positionX + offset, 0.4, positionZ)
     }
   }

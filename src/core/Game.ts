@@ -1,5 +1,7 @@
 import * as THREE from 'three'
 import { InputManager } from './InputManager'
+import { PlayerController } from './PlayerController'
+import { Player } from '../entities/Player'
 import { World } from '../world/World'
 import { setupLighting } from '../world/Lighting'
 
@@ -9,11 +11,10 @@ export class Game {
   private readonly renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' })
   private readonly input = new InputManager()
   private readonly world = new World()
+  private readonly player = new Player()
+  private readonly controller: PlayerController
   private readonly target = new THREE.Vector3(0, 0, 0)
   private readonly cameraOffset = new THREE.Vector3(26, 34, 32)
-  private readonly forward = new THREE.Vector3(-26, 0, -32).normalize()
-  private readonly right = new THREE.Vector3(32, 0, -26).normalize()
-  private readonly movement = new THREE.Vector3()
   private previousTime = 0
   private elapsedTime = 0
   private running = false
@@ -26,9 +27,11 @@ export class Game {
     this.renderer.domElement.setAttribute('aria-label', 'DUST & NEON: escenario western alienigena en 3D')
     container.append(this.renderer.domElement)
     setupLighting(this.scene)
-    this.scene.add(this.world.root)
+    this.scene.add(this.world.root, this.player.root)
+    this.target.copy(this.player.position)
     this.updateCamera()
     this.resize()
+    this.controller = new PlayerController(this.input, this.camera, this.player, this.renderer.domElement, this.world.obstacles)
     window.addEventListener('resize', this.resize)
   }
 
@@ -43,21 +46,12 @@ export class Game {
     const deltaTime = Math.min(Math.max((time - this.previousTime) / 1000, 0), 0.05)
     this.previousTime = time
     this.elapsedTime += deltaTime
-    this.moveCamera(deltaTime)
+    this.controller.updateMovement(deltaTime)
+    this.target.lerp(this.player.position, 1 - Math.exp(-6 * deltaTime))
+    this.updateCamera()
+    this.controller.updateAim()
     this.world.update(this.elapsedTime)
     this.renderer.render(this.scene, this.camera)
-  }
-
-  private moveCamera(deltaTime: number): void {
-    const horizontal = Number(this.input.isPressed('KeyD')) - Number(this.input.isPressed('KeyA'))
-    const vertical = Number(this.input.isPressed('KeyW')) - Number(this.input.isPressed('KeyS'))
-    this.movement.copy(this.right).multiplyScalar(horizontal).addScaledVector(this.forward, vertical)
-    if (this.movement.lengthSq() > 0) {
-      this.target.addScaledVector(this.movement.normalize(), 12 * deltaTime)
-      this.target.x = THREE.MathUtils.clamp(this.target.x, -22, 22)
-      this.target.z = THREE.MathUtils.clamp(this.target.z, -22, 22)
-      this.updateCamera()
-    }
   }
 
   private updateCamera(): void {
@@ -83,7 +77,9 @@ export class Game {
     this.running = false
     this.renderer.setAnimationLoop(null)
     window.removeEventListener('resize', this.resize)
+    this.controller.dispose()
     this.input.dispose()
+    this.player.dispose()
     this.world.dispose()
     this.scene.traverse((object) => {
       if (object instanceof THREE.Light) object.dispose()
