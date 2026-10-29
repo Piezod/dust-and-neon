@@ -4,6 +4,7 @@ import { PLAYER_BASE_STATS } from '../config/player.config'
 import { Player } from '../entities/Player'
 import { InputManager } from './InputManager'
 import { PlayerController } from './PlayerController'
+import { PlayerHUD } from '../ui/PlayerHUD'
 
 export function runCharacterStatsChecks(): string {
   let checks = 0
@@ -24,6 +25,7 @@ export function runCharacterStatsChecks(): string {
   const stats = new CharacterStats(base)
   base.moveSpeed = 999
   close(stats.getStat('moveSpeed'), 5.5, 'Base values must be copied')
+  close(stats.getBaseStat('moveSpeed'), 5.5, 'Base getter must expose original value')
   stats.takeDamage(30)
   stats.heal(10)
   close(stats.currentHealth, 80, 'Damage 30 and heal 10')
@@ -71,10 +73,13 @@ export function runCharacterStatsChecks(): string {
   check(!ordered.removeModifier('missing'), 'Unknown removal must be harmless')
   const boost = { id: 'boost', stat: 'moveSpeed' as const, percentage: 0.2 }
   ordered.addModifier(boost)
+  const snapshot = ordered.getModifiers()
+  check(Object.isFrozen(snapshot) && Object.isFrozen(snapshot[0]), 'Modifier snapshots must be immutable')
   boost.percentage = 9
   close(ordered.getStat('moveSpeed'), 6.6, 'Modifiers must be copied')
   rejects(() => ordered.addModifier(boost), 'Duplicate ids must be rejected')
   ordered.removeModifier('boost')
+  check(snapshot.length === 1 && ordered.getModifiers().length === 0, 'Modifier snapshots must not expose the live collection')
 
   const limits = new CharacterStats({ ...PLAYER_BASE_STATS, defense: -10, criticalChance: 2 })
   close(limits.getStat('defense'), 0, 'Defense lower bound')
@@ -151,4 +156,100 @@ export function runCharacterStatsChecks(): string {
     player.dispose()
   }
   return `${checks} checks passed`
+}
+
+export function runPlayerHUDChecks(): string {
+  let checks = 0
+  const check = (condition: boolean, label: string): void => {
+    if (!condition) throw new Error(label)
+    checks++
+  }
+  const container = document.createElement('div')
+  container.style.cssText = 'position:fixed;left:-10000px;top:0;width:400px;height:800px'
+  document.body.append(container)
+  const player = new Player()
+  const input = new InputManager()
+  const hud = new PlayerHUD(container, player.stats)
+  const panel = container.querySelector<HTMLElement>('.hud-debug')!
+  const bar = container.querySelector<HTMLElement>('[data-bar="health"]')!
+  const fill = bar.firstElementChild as HTMLElement
+  const button = (action: string): HTMLButtonElement => container.querySelector(`[data-action="${action}"]`)!
+  const value = (key: string): string | null => container.querySelector(`[data-value="${key}"]`)!.textContent
+  const f3 = (repeat = false): void => {
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'F3', repeat, cancelable: true }))
+  }
+  const events = new AbortController()
+  let escapedPointerEvents = 0
+  window.addEventListener('pointerdown', () => escapedPointerEvents++, { signal: events.signal })
+  try {
+    check(panel.hidden, 'Debug starts closed')
+    f3()
+    check(!panel.hidden, 'F3 opens debug')
+    f3(true)
+    check(!panel.hidden, 'Holding F3 must not toggle again')
+    f3()
+    check(panel.hidden, 'F3 closes debug')
+    button('damage').click()
+    check(player.stats.currentHealth === 80 && value('health') === '80 / 100', 'Damage updates domain and DOM immediately')
+    check(fill.style.width === '80%', 'Health fill matches current resource')
+    button('heal').click()
+    check(player.stats.currentHealth === 100, 'Healing uses domain API')
+    button('spend').click()
+    check(player.stats.currentEnergy === 75 && value('energy') === '75 / 100', 'Energy spending updates immediately')
+    button('restore').click()
+    check(player.stats.currentEnergy === 100, 'Energy recovery uses domain API')
+    for (const [key, stat, expected] of [['speed', 'moveSpeed', 6.6], ['damage', 'attackDamage', 22.5]] as const) {
+      const toggle = container.querySelector<HTMLInputElement>(`[data-modifier="${key}"]`)!
+      toggle.click()
+      check(Math.abs(player.stats.getStat(stat) - expected) < 1e-9, `${key}: toggle changes effective stat`)
+      toggle.dispatchEvent(new Event('change', { bubbles: true }))
+      check(player.stats.getModifiers().filter((modifier) => modifier.stat === stat).length === 1, `${key}: repeated activation must not stack`)
+      if (key === 'speed') {
+        const start = player.position.clone()
+        player.update(new THREE.Vector3(1, 0, 0), 1, [])
+        check(Math.abs(player.position.distanceTo(start) - 6.6) < 1e-9, 'HUD speed boost changes real Player movement')
+      }
+      toggle.click()
+      check(player.stats.getStat(stat) === player.stats.getBaseStat(stat), `${key}: removing boost restores original stat`)
+    }
+    check(value('base-moveSpeed') === '5,5' && value('criticalChance') === '5%', 'Base and critical percentage formatting')
+    button('damage').click()
+    button('spend').click()
+    button('refill').click()
+    check(player.stats.currentHealth === 100 && player.stats.currentEnergy === 100, 'Refill restores both resources through public APIs')
+    player.stats.addModifier({ id: 'check.zero-health', stat: 'maxHealth', percentage: -1 })
+    hud.update()
+    check(fill.style.width === '0%' && bar.getAttribute('aria-valuemax') === '0', 'Zero maximum must produce an empty finite bar')
+    player.stats.removeModifier('check.zero-health')
+    player.stats.heal(1000)
+    player.stats.restoreEnergy(1000)
+    hud.update()
+    check(fill.style.width === '100%', 'Resource bars must not exceed 100%')
+    check(container.querySelector('[data-bar="health"]') === bar, 'Updates must reuse DOM nodes')
+    button('damage').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
+    check(escapedPointerEvents === 0, 'Panel pointer events must not reach scene listeners')
+    button('damage').dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW', bubbles: true }))
+    check(!input.isPressed('KeyW'), 'Panel keyboard events must not activate movement')
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW' }))
+    button('damage').dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyW', bubbles: true }))
+    check(!input.isPressed('KeyW'), 'Key releases must still clear previously pressed keys')
+    container.querySelector<HTMLInputElement>('[data-modifier="speed"]')!.click()
+    hud.destroy()
+    check(container.children.length === 0 && player.stats.getModifiers().length === 0, 'Destroy removes DOM and HUD-owned modifiers')
+    const health = player.stats.currentHealth
+    hud.update()
+    const hidden = panel.hidden
+    f3()
+    check(panel.hidden === hidden, 'Destroy removes F3 listener')
+    f3()
+    hud.destroy()
+    check(player.stats.currentHealth === health, 'Cleanup is idempotent and does not change resources')
+  } finally {
+    hud.destroy()
+    events.abort()
+    input.dispose()
+    player.dispose()
+    container.remove()
+  }
+  return `${checks} HUD checks passed`
 }

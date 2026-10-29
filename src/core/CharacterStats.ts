@@ -26,6 +26,14 @@ export class CharacterStats {
     return this.effective[stat]
   }
 
+  getBaseStat(stat: StatKey): number {
+    return this.base[stat]
+  }
+
+  getModifiers(): readonly Readonly<StatModifier>[] {
+    return Object.freeze([...this.modifiers.values()])
+  }
+
   takeDamage(amount: number): void {
     this.validateAmount(amount)
     this.health = Math.max(0, this.health - amount)

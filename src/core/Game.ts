@@ -4,6 +4,7 @@ import { PlayerController } from './PlayerController'
 import { Player } from '../entities/Player'
 import { World } from '../world/World'
 import { setupLighting } from '../world/Lighting'
+import { PlayerHUD } from '../ui/PlayerHUD'
 
 export class Game {
   private readonly scene = new THREE.Scene()
@@ -13,6 +14,7 @@ export class Game {
   private readonly world = new World()
   private readonly player = new Player()
   private readonly controller: PlayerController
+  private readonly hud: PlayerHUD
   private readonly target = new THREE.Vector3(0, 0, 0)
   private readonly cameraOffset = new THREE.Vector3(26, 34, 32)
   private previousTime = 0
@@ -32,6 +34,7 @@ export class Game {
     this.updateCamera()
     this.resize()
     this.controller = new PlayerController(this.input, this.camera, this.player, this.renderer.domElement, this.world.obstacles)
+    this.hud = new PlayerHUD(container, this.player.stats)
     window.addEventListener('resize', this.resize)
   }
 
@@ -51,6 +54,7 @@ export class Game {
     this.updateCamera()
     this.controller.updateAim()
     this.world.update(this.elapsedTime)
+    this.hud.update()
     this.renderer.render(this.scene, this.camera)
   }
 
@@ -77,6 +81,7 @@ export class Game {
     this.running = false
     this.renderer.setAnimationLoop(null)
     window.removeEventListener('resize', this.resize)
+    this.hud.destroy()
     this.controller.dispose()
     this.input.dispose()
     this.player.dispose()

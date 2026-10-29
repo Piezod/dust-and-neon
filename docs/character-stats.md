@@ -64,3 +64,13 @@ limites, entradas invalidas, recursos, maxima sin relleno, velocidad 5.5/6.6/0,
 WASD, diagonales y apuntado mediante PlayerController.
 Las instancias temporales no se renderizan y se liberan al finalizar.
 No existe script de tests ni framework de pruebas en este proyecto.
+
+## Fase 3B: consultas para el HUD
+
+`getBaseStat(key)` permite consultar el valor original sin exponer el objeto base.
+`getModifiers()` devuelve un snapshot congelado de modificadores de solo lectura,
+no el Map interno. Se debe consultar de nuevo para obtener cambios posteriores.
+
+El mismo modulo de comprobaciones exporta `runPlayerHUDChecks()`. Ejecutarlo en
+la consola del navegador valida recursos, mejoras, actualizacion y limpieza del HUD.
+La arquitectura y personalizacion se explican en [PLAYER_HUD_GUIDE.md](PLAYER_HUD_GUIDE.md).

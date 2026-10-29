@@ -1,0 +1,85 @@
+.player-hud {
+  --hud-health: #e85c54;
+  --hud-energy: #4055cc;
+  --hud-ink: #fff3da;
+  --hud-muted: #c3c4b8;
+  --hud-line: #ffffff24;
+  --hud-accent: #ffcc00;
+  position: absolute;
+  z-index: 2;
+  left: 32px;
+  bottom: 60px;
+  width: min(300px, calc(100% - 64px));
+  color: var(--hud-ink);
+  font-size: 148px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.hud-telemetry {
+  padding: 12px 14px;
+  background: linear-gradient(110deg, #171d1bf2, #242522df);
+  border-left: 2px solid #d5bc8d;
+  box-shadow: 0 3px 14px #00000030;
+}
+
+.hud-resource + .hud-resource { margin-top: 10px; }
+.hud-resource__label { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 5px; font-size: 10px; }
+.hud-resource__label output { overflow-wrap: anywhere; text-align: right; }
+.hud-resource__track { height: 7px; overflow: hidden; background: #00000075; }
+.hud-resource__track > span { display: block; width: 0; height: 100%; transition: width 180ms ease-out; }
+.hud-resource--health .hud-resource__track > span { background: var(--hud-health); }
+.hud-resource--energy .hud-resource__track > span { background: var(--hud-energy); }
+.hud-attributes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 12px 0 0; padding-top: 9px; border-top: 1px solid var(--hud-line); }
+.hud-attributes dt { font-size: 9px; color: var(--hud-muted); }
+.hud-attributes dd { margin: 3px 0 0; font-size: 14px; overflow-wrap: anywhere; }
+
+.hud-debug {
+  width: min(326px, calc(100vw - 64px));
+  max-height: max(100px, calc(100dvh - 310px));
+  margin-bottom: 12px;
+  padding: 14px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  background: #171d1bf5;
+  border: 1px solid #bca57980;
+  border-top: 2px solid var(--hud-energy);
+  border-radius: 3px;
+  box-shadow: 0 8px 24px #00000050;
+  pointer-events: auto;
+}
+
+.hud-debug[hidden] { display: none; }
+.hud-debug__header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.hud-debug h2 { margin: 0; font-family: Rockwell, 'Courier New', serif; font-size: 15px; color: #e3cda5; }
+.hud-debug button { min-height: 34px; padding: 6px 8px; border: 1px solid #ffffff30; border-radius: 3px; font: inherit; color: var(--hud-ink); background: #ffffff08; cursor: pointer; overflow-wrap: anywhere; }
+.hud-debug button:hover { background: #ffffff18; border-color: var(--hud-energy); }
+.hud-debug button:active { background: #56ddc724; }
+.hud-debug button:focus-visible, .hud-debug input:focus-visible, .hud-debug:focus-visible { outline: 2px solid var(--hud-energy); outline-offset: 3px; }
+.hud-debug__header button { flex: 0 0 30px; width: 30px; min-height: 30px; padding: 0; font-size: 22px; }
+.hud-debug__resources { display: grid; gap: 6px; margin: 12px 0; }
+.hud-debug__resources > div { display: flex; justify-content: space-between; gap: 12px; }
+.hud-debug__resources dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
+.hud-debug__stats { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 11px; }
+.hud-debug__stats th, .hud-debug__stats td { padding: 6px 0; border-top: 1px solid var(--hud-line); text-align: right; overflow-wrap: anywhere; }
+.hud-debug__stats th { color: var(--hud-muted); font-weight: normal; }
+.hud-debug__stats th:first-child { width: 42%; text-align: left; }
+.hud-debug__actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin-top: 12px; }
+.hud-debug__toggles { display: grid; gap: 8px; margin: 12px 0; }
+.hud-debug__toggles label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.hud-debug input { width: 16px; height: 16px; margin: 0; accent-color: var(--hud-energy); }
+.hud-debug__refill { width: 100%; }
+
+@media (max-width: 600px) {
+  .player-hud { left: 20px; bottom: 52px; width: min(250px, calc(100% - 40px)); }
+  .hud-debug { position: fixed; top: 88px; left: 20px; width: min(326px, calc(100vw - 40px)); max-height: max(80px, calc(50dvh - 128px)); margin: 0; }
+}
+
+@media (max-height: 500px) and (min-width: 601px) {
+  .player-hud { left: 16px; bottom: 50px; width: min(240px, calc(100% - 32px)); }
+  .hud-debug { position: fixed; top: 12px; right: 16px; width: min(280px, calc(50vw - 48px)); max-height: calc(100dvh - 24px); margin: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hud-resource__track > span { transition: none; }
+}
