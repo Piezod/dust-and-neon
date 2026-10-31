@@ -5,6 +5,13 @@ import { Player } from '../entities/Player'
 import { InputManager } from './InputManager'
 import { PlayerController } from './PlayerController'
 import { PlayerHUD } from '../ui/PlayerHUD'
+import { runAbilityChecks } from '../abilities/Ability.check'
+import { runCombatChecks } from '../combat/Combat.check'
+import { runEnemyChecks } from '../enemies/Enemy.check'
+import { runLootChecks } from '../loot/Loot.check'
+import { runPlayerDeathChecks } from './PlayerDeath.check'
+import { runWaveChecks } from '../waves/Wave.check'
+import { DASH_ABILITY_CONFIG } from '../config/abilities.config'
 
 export function runCharacterStatsChecks(): string {
   let checks = 0
@@ -102,7 +109,8 @@ export function runCharacterStatsChecks(): string {
   close(stats.currentHealth, 70, 'Damage remains direct; combat mitigation is not implemented')
 
   const player = new Player()
-  const input = new InputManager()
+  const keyboardTarget = new EventTarget()
+  const input = new InputManager(keyboardTarget)
   const canvas = document.createElement('canvas')
   canvas.getBoundingClientRect = () => new DOMRect(0, 0, 800, 600)
   const camera = new THREE.OrthographicCamera(-10, 10, 10, -10, 0.1, 100)
@@ -110,7 +118,7 @@ export function runCharacterStatsChecks(): string {
   camera.lookAt(0, 0, 0)
   const controller = new PlayerController(input, camera, player, canvas, [])
   const key = (type: string, code: string): void => {
-    window.dispatchEvent(new KeyboardEvent(type, { code }))
+    keyboardTarget.dispatchEvent(new KeyboardEvent(type, { code }))
   }
   try {
     const direction = new THREE.Vector3(1, 0, 0)
@@ -168,8 +176,8 @@ export function runPlayerHUDChecks(): string {
   container.style.cssText = 'position:fixed;left:-10000px;top:0;width:400px;height:800px'
   document.body.append(container)
   const player = new Player()
-  const input = new InputManager()
-  const hud = new PlayerHUD(container, player.stats)
+  const input = new InputManager(container)
+  const hud = new PlayerHUD(container, player.stats, player.abilities)
   const panel = container.querySelector<HTMLElement>('.hud-debug')!
   const bar = container.querySelector<HTMLElement>('[data-bar="health"]')!
   const fill = bar.firstElementChild as HTMLElement
@@ -183,6 +191,26 @@ export function runPlayerHUDChecks(): string {
   window.addEventListener('pointerdown', () => escapedPointerEvents++, { signal: events.signal })
   try {
     check(panel.hidden, 'Debug starts closed')
+    const abilityStatus = container.querySelector<HTMLElement>('.hud-ability[data-ability-id="dash"]')!
+    check(abilityStatus.dataset.status === 'ready', 'HUD shows Dash as available')
+    player.stats.spendEnergy(100)
+    hud.update()
+    check(abilityStatus.dataset.status === 'insufficient-energy', 'HUD indicates insufficient ability energy')
+    player.stats.restoreEnergy(100)
+    hud.update()
+    check(abilityStatus.dataset.status === 'ready', 'HUD returns Dash to available when energy is restored')
+    check(player.abilities.tryActivate('dash', { movementDirection: { x: 1, z: 0 } }).activated, 'HUD test starts Dash')
+    hud.update()
+    check(abilityStatus.dataset.status === 'active', 'HUD shows Dash while active')
+    player.update(new THREE.Vector3(), 0.18, [])
+    hud.update()
+    check(abilityStatus.dataset.status === 'cooldown' && (abilityStatus.textContent ?? '').includes(String(DASH_ABILITY_CONFIG.cooldownSeconds)), 'HUD shows remaining Dash cooldown')
+    player.stats.restoreEnergy(DASH_ABILITY_CONFIG.energyCost)
+    player.stats.spendEnergy(101 - DASH_ABILITY_CONFIG.energyCost)
+    hud.update()
+    check(abilityStatus.dataset.status === 'insufficient-energy' && (abilityStatus.textContent ?? '').includes(String(DASH_ABILITY_CONFIG.cooldownSeconds)), 'HUD indicates insufficient energy and preserves cooldown status')
+    player.stats.restoreEnergy(100)
+    hud.update()
     f3()
     check(!panel.hidden, 'F3 opens debug')
     f3(true)
@@ -230,7 +258,7 @@ export function runPlayerHUDChecks(): string {
     check(escapedPointerEvents === 0, 'Panel pointer events must not reach scene listeners')
     button('damage').dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW', bubbles: true }))
     check(!input.isPressed('KeyW'), 'Panel keyboard events must not activate movement')
-    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW' }))
+    container.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW', bubbles: true }))
     button('damage').dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyW', bubbles: true }))
     check(!input.isPressed('KeyW'), 'Key releases must still clear previously pressed keys')
     container.querySelector<HTMLInputElement>('[data-modifier="speed"]')!.click()
@@ -253,3 +281,10 @@ export function runPlayerHUDChecks(): string {
   }
   return `${checks} HUD checks passed`
 }
+
+export { runAbilityChecks }
+export { runCombatChecks }
+export { runEnemyChecks }
+export { runLootChecks }
+export { runPlayerDeathChecks }
+export { runWaveChecks }

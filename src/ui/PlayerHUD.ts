@@ -1,4 +1,10 @@
 import type { CharacterStats } from '../core/CharacterStats'
+import type { AbilityManager } from '../abilities/AbilityManager'
+import type { EnemyManager } from '../enemies/EnemyManager'
+import type { LootManager } from '../loot/LootManager'
+import type { Wallet } from '../loot/Wallet'
+import type { WaveManager } from '../waves/WaveManager'
+import type { WaveState } from '../waves/Wave.types'
 import type { StatKey, StatModifier } from '../core/CharacterStats.types'
 import './player-hud.css'
 
@@ -17,18 +23,30 @@ const DEBUG_STATS: readonly { key: StatKey; label: string }[] = [
 export class PlayerHUD {
   private readonly root = document.createElement('section')
   private readonly stats: CharacterStats
+  private readonly abilities: AbilityManager
+  private readonly enemies?: EnemyManager
+  private readonly wallet?: Wallet
+  private readonly loot?: LootManager
+  private readonly waves?: WaveManager
   private readonly panel: HTMLElement
   private readonly healthBar: HTMLElement
   private readonly energyBar: HTMLElement
   private readonly readouts = new Map<string, HTMLElement[]>()
   private readonly toggles: HTMLInputElement[]
+  private readonly abilityReadouts = new Map<string, HTMLElement>()
   private readonly events = new AbortController()
   private readonly numberFormat = new Intl.NumberFormat('es', { maximumFractionDigits: 2 })
+  private unsubscribeWallet: (() => void) | null = null
   private previousFocus: HTMLElement | null = null
   private destroyed = false
 
-  constructor(container: HTMLElement, stats: CharacterStats) {
+  constructor(container: HTMLElement, stats: CharacterStats, abilities: AbilityManager, enemies?: EnemyManager, wallet?: Wallet, loot?: LootManager, waves?: WaveManager) {
     this.stats = stats
+    this.abilities = abilities
+    this.enemies = enemies
+    this.wallet = wallet
+    this.loot = loot
+    this.waves = waves
     this.root.className = 'player-hud'
     this.root.setAttribute('aria-label', 'Estadisticas del personaje')
     this.root.innerHTML = `
@@ -37,7 +55,10 @@ export class PlayerHUD {
         <dl class="hud-debug__resources">
           <div><dt>Vida</dt><dd data-value="health"></dd></div>
           <div><dt>Energia</dt><dd data-value="energy"></dd></div>
+          <div><dt>Enemigos</dt><dd data-value="enemy-count"></dd></div>
+          <div><dt>Estado</dt><dd data-value="wave-state"></dd></div>
         </dl>
+        ${this.loot ? `<div class="hud-debug__loot"><button type="button" data-action="debug-health">Generar vida</button><button type="button" data-action="debug-energy">Generar energia</button><button type="button" data-action="debug-gold">Generar oro</button></div>` : ''}
         <table class="hud-debug__stats">
           <thead><tr><th scope="col">Estadistica</th><th scope="col">Base</th><th scope="col">Efectiva</th></tr></thead>
           <tbody>${DEBUG_STATS.map(({ key, label }) => `<tr><th scope="row">${label}</th><td data-value="base-${key}"></td><td data-value="${key}"></td></tr>`).join('')}</tbody>
@@ -63,6 +84,12 @@ export class PlayerHUD {
           <div class="hud-resource__label"><span>ENERGIA</span><output data-value="energy"></output></div>
           <div class="hud-resource__track" data-bar="energy" role="progressbar" aria-label="Energia" aria-valuemin="0"><span></span></div>
         </div>
+        <div class="hud-currency" aria-label="Oro"><span class="hud-currency__coin" aria-hidden="true"></span><span>ORO</span><output data-value="gold">0</output></div>
+        ${this.waves ? `<section class="hud-wave" aria-label="Oleada"><div><span>ONDA</span><output data-value="wave-number"></output></div><div><span>RESTANTES</span><output data-value="wave-enemies"></output></div></section>` : ''}
+        <section class="hud-abilities" aria-label="Habilidades">
+          <h2>HABILIDADES</h2>
+          <div class="hud-ability-list"></div>
+        </section>
         <dl class="hud-attributes">
           <div><dt>VEL</dt><dd data-value="moveSpeed"></dd></div>
           <div><dt>DANO</dt><dd data-value="attackDamage"></dd></div>
@@ -73,6 +100,7 @@ export class PlayerHUD {
     this.panel = this.root.querySelector<HTMLElement>('.hud-debug')!
     this.healthBar = this.root.querySelector<HTMLElement>('[data-bar="health"]')!
     this.energyBar = this.root.querySelector<HTMLElement>('[data-bar="energy"]')!
+    this.initializeAbilityReadouts()
     this.toggles = Array.from(this.root.querySelectorAll<HTMLInputElement>('[data-modifier]'))
     for (const element of Array.from(this.root.querySelectorAll<HTMLElement>('[data-value]'))) {
       const key = element.dataset.value!
@@ -80,6 +108,7 @@ export class PlayerHUD {
       entries.push(element)
       this.readouts.set(key, entries)
     }
+    if (this.wallet) this.unsubscribeWallet = this.wallet.subscribe((balance) => this.setText('gold', this.numberFormat.format(balance)))
     const options = { signal: this.events.signal }
     this.panel.addEventListener('click', this.onAction, options)
     this.panel.addEventListener('change', this.onModifierChange, options)
@@ -95,6 +124,14 @@ export class PlayerHUD {
     if (this.destroyed) return
     this.updateResource(this.healthBar, 'health', this.stats.currentHealth, this.stats.getStat('maxHealth'))
     this.updateResource(this.energyBar, 'energy', this.stats.currentEnergy, this.stats.getStat('maxEnergy'))
+    this.setText('enemy-count', String(this.enemies?.aliveCount ?? 0))
+    this.setText('gold', this.numberFormat.format(this.wallet?.balance ?? 0))
+    const wave = this.waves?.getSnapshot()
+    if (wave) {
+      this.setText('wave-number', `${wave.waveNumber} / ${wave.totalWaves}`)
+      this.setText('wave-enemies', String(wave.enemiesRemaining))
+      this.setText('wave-state', this.formatWaveState(wave.state))
+    }
     for (const { key } of DEBUG_STATS) {
       this.setText(key, this.formatStat(key, this.stats.getStat(key)))
       this.setText(`base-${key}`, this.formatStat(key, this.stats.getBaseStat(key)))
@@ -104,6 +141,7 @@ export class PlayerHUD {
       const modifier = DEBUG_MODIFIERS[toggle.dataset.modifier as keyof typeof DEBUG_MODIFIERS]
       toggle.checked = modifiers.some((active) => active.id === modifier.id)
     }
+    this.updateAbilities()
   }
 
   destroy(): void {
@@ -111,6 +149,8 @@ export class PlayerHUD {
     this.setDebugOpen(false)
     this.destroyed = true
     this.events.abort()
+    this.unsubscribeWallet?.()
+    this.unsubscribeWallet = null
     for (const modifier of Object.values(DEBUG_MODIFIERS)) this.stats.removeModifier(modifier.id)
     this.root.remove()
   }
@@ -125,6 +165,53 @@ export class PlayerHUD {
     this.setText(key, `${this.numberFormat.format(current)} / ${this.numberFormat.format(maximum)}`)
   }
 
+  private initializeAbilityReadouts(): void {
+    const list = this.root.querySelector<HTMLElement>('.hud-ability-list')!
+    for (const state of this.abilities.getStates()) {
+      const row = document.createElement('div')
+      row.className = 'hud-ability'
+      row.dataset.abilityId = state.id
+      const name = document.createElement('span')
+      name.className = 'hud-ability__name'
+      name.textContent = state.name
+      const key = document.createElement('span')
+      key.className = 'hud-ability__key'
+      key.textContent = state.inputLabel
+      const status = document.createElement('output')
+      status.className = 'hud-ability__status'
+      row.append(name, key, status)
+      list.append(row)
+      this.abilityReadouts.set(state.id, status)
+    }
+  }
+
+  private updateAbilities(): void {
+    for (const state of this.abilities.getStates()) {
+      let label: string
+      let status: string
+      if (state.active) {
+        label = 'active'
+        status = 'DASHING'
+      } else if (!state.energySufficient) {
+        label = 'insufficient-energy'
+        status = state.cooldownRemaining > 0
+          ? `SIN ENERGIA · ${this.numberFormat.format(Math.ceil(state.cooldownRemaining * 10) / 10)}s`
+          : 'SIN ENERGIA'
+      } else if (state.cooldownRemaining > 0) {
+        label = 'cooldown'
+        status = `RECARGA ${this.numberFormat.format(Math.ceil(state.cooldownRemaining * 10) / 10)}s`
+      } else {
+        label = 'ready'
+        status = 'DISPONIBLE'
+      }
+      const element = this.abilityReadouts.get(state.id)
+      if (element) {
+        element.parentElement!.dataset.status = label
+        if (element.textContent !== status) element.textContent = status
+      }
+    }
+  }
+
   private setText(key: string, value: string): void {
     for (const element of this.readouts.get(key) ?? []) {
       if (element.textContent !== value) element.textContent = value
@@ -133,6 +220,17 @@ export class PlayerHUD {
 
   private formatStat(key: StatKey, value: number): string {
     return key === 'criticalChance' ? `${this.numberFormat.format(value * 100)}%` : this.numberFormat.format(value)
+  }
+
+  private formatWaveState(state: WaveState): string {
+    const labels: Readonly<Record<WaveState, string>> = {
+      preparation: 'PREPARACION',
+      combat: 'COMBATE',
+      completed: 'COMPLETADA',
+      upgrades: 'INTERMISION',
+      'game-over': 'JUGADOR CAIDO',
+    }
+    return labels[state]
   }
 
   private setDebugOpen(open: boolean): void {
@@ -152,7 +250,7 @@ export class PlayerHUD {
     if (event.code !== 'F3') return
     event.preventDefault()
     event.stopPropagation()
-    if (!event.repeat) this.setDebugOpen(this.panel.hidden)
+    if (!event.repeat) this.setDebugOpen(Boolean(this.panel.hidden))
   }
 
   private readonly stopPropagation = (event: Event): void => {
@@ -171,6 +269,9 @@ export class PlayerHUD {
         this.stats.heal(this.stats.getStat('maxHealth'))
         this.stats.restoreEnergy(this.stats.getStat('maxEnergy'))
         break
+      case 'debug-health': this.loot?.spawnDebugPickup('health'); break
+      case 'debug-energy': this.loot?.spawnDebugPickup('energy'); break
+      case 'debug-gold': this.loot?.spawnDebugPickup('gold'); break
       case 'close': this.setDebugOpen(false); break
     }
     this.update()

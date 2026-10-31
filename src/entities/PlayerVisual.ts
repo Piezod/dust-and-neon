@@ -7,6 +7,7 @@ export class PlayerVisual {
   private readonly rightLeg = new THREE.Group()
   private readonly leftArm = new THREE.Group()
   private readonly rightArm = new THREE.Group()
+  private readonly muzzle = new THREE.Object3D()
   private readonly coatTails: THREE.Group[] = []
   private readonly geometries = new Set<THREE.BufferGeometry>()
   private readonly materials = new Set<THREE.Material>()
@@ -85,6 +86,9 @@ export class PlayerVisual {
     this.box(revolver, gunmetal, 0.13, 0.13, 0.47, 0, 0.09, 0.4)
     this.box(revolver, neon, 0.15, 0.035, 0.32, 0, 0.17, 0.4)
     this.box(revolver, neon, 0.145, 0.145, 0.045, 0, 0.09, 0.64)
+    this.muzzle.name = 'RevolverMuzzle'
+    this.muzzle.position.set(0, 0.09, 0.68)
+    revolver.add(this.muzzle)
   }
 
   private material(color: string, metalness = 0, emissive = '#000000', emissiveIntensity = 0): THREE.MeshStandardMaterial {
@@ -131,6 +135,11 @@ export class PlayerVisual {
     this.coatTails.forEach((tail, index) => {
       tail.rotation.x = Math.sin(this.stride + index * Math.PI) * this.walkBlend * 0.12
     })
+  }
+
+  getMuzzleWorldPosition(target: THREE.Vector3): THREE.Vector3 {
+    this.root.updateWorldMatrix(true, true)
+    return this.muzzle.getWorldPosition(target)
   }
 
   dispose(): void {

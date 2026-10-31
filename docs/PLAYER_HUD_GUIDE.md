@@ -1,6 +1,6 @@
 # PlayerHUD: guia para modificarlo personalmente
 
-Esta guia describe el HUD real de la fase 3B. No usa Angular, frameworks de UI ni un segundo bucle de animacion.
+Esta guia describe el HUD de las fases 3B y 3C. No usa Angular, frameworks de UI ni un segundo bucle de animacion.
 
 ## 1. Arquitectura
 
@@ -8,12 +8,16 @@ Esta guia describe el HUD real de la fase 3B. No usa Angular, frameworks de UI n
 | --- | --- |
 | `src/main.ts` | Importa los estilos generales, crea `Game`, lo inicia y registra `game.dispose()` para HMR de Vite. |
 | `src/core/Game.ts` | Posee un `Player`, un `PlayerController` y un `PlayerHUD`. Coordina movimiento, camara, apuntado, mundo, HUD y render. |
-| `src/entities/Player.ts` | Posee `readonly stats = new CharacterStats(PLAYER_BASE_STATS)`. Su getter `speed` lee `moveSpeed` efectivo. |
+| `src/entities/Player.ts` | Posee estadisticas y `AbilityManager`. Resuelve movimiento de habilidades y normal con las colisiones existentes. |
 | `src/core/CharacterStats.ts` | Dominio: recursos, estadisticas base/efectivas y modificadores. No conoce DOM ni Three.js. |
 | `src/core/CharacterStats.types.ts` | Define `CharacterStatValues`, `StatKey` y `StatModifier`. El HUD reutiliza estos tipos, no los redefine. |
 | `src/config/player.config.ts` | Define `PLAYER_BASE_STATS`, incluyendo velocidad 5.5, dano 15 y probabilidad critica 0.05. |
 | `src/ui/PlayerHUD.ts` | Crea el DOM, conserva referencias, muestra estadisticas y traduce controles de depuracion a llamadas al dominio. |
 | `src/ui/player-hud.css` | Colores, barras, posicion, panel, transiciones y reglas responsive. Lo importa `PlayerHUD.ts`. |
+| `src/abilities/Ability.ts` y `Ability.types.ts` | Contrato reutilizable, configuracion tipada, disponibilidad, coste, cooldown y resultados. |
+| `src/abilities/AbilityManager.ts` | Registro, activacion, actualizacion por frame y lectura de estados. |
+| `src/abilities/DashAbility.ts` | Direccion capturada, duracion y orden temporal de desplazamiento de Dash. |
+| `src/config/abilities.config.ts` | Parametros de Dash y lista de factories de habilidades del jugador. |
 | `src/style.css` | Estilos generales, canvas, marca y pie del escenario. |
 | `src/core/CharacterStats.check.ts` | Expone `runCharacterStatsChecks()` y `runPlayerHUDChecks()`, sin framework de tests. |
 
@@ -22,7 +26,13 @@ flowchart TD
   Config[PLAYER_BASE_STATS] --> Player
   Game --> Player
   Player --> Stats[CharacterStats: fuente de verdad]
-  Game -->|new PlayerHUD container, player.stats| HUD[PlayerHUD]
+  Player --> Abilities[AbilityManager]
+  Abilities --> Dash[DashAbility]
+  Abilities -->|gasta energia una vez| Stats
+  Input[InputManager: ShiftLeft] --> Controller[PlayerController]
+  Controller -->|activacion con direccion| Abilities
+  Abilities -->|orden de movimiento| Player
+  Game -->|new PlayerHUD container, player.stats, player.abilities| HUD[PlayerHUD]
   Game -->|tick: hud.update| HUD
   Stats -->|consultas publicas| HUD
   HUD -->|textContent, ancho, atributos y checked| DOM[HTML sobre el canvas]
@@ -46,7 +56,7 @@ El constructor recibe la misma instancia `player.stats`, no una copia. No hay un
 En el constructor de `Game`, despues de crear el controlador:
 
 ```ts
-this.hud = new PlayerHUD(container, this.player.stats)
+this.hud = new PlayerHUD(container, this.player.stats, this.player.abilities)
 ```
 
 `PlayerHUD` crea `root`, asigna la plantilla una sola vez y busca las referencias a barras, panel, casillas y lecturas. El mapa `readouts` agrupa los elementos por `data-value`: una misma lectura, como `health`, aparece tanto en el panel como en el HUD compacto.
@@ -58,15 +68,20 @@ Despues registra listeners, inserta `root` en `container` y ejecuta `update()` p
 `Game.start()` ya registra `this.tick` con `renderer.setAnimationLoop`. En cada `tick`:
 
 1. Se calcula un `deltaTime` limitado a 0.05 segundos.
-2. Se ejecutan movimiento, seguimiento de camara, apuntado y actualizacion del mundo.
-3. Se llama a `this.hud.update()`.
-4. Se renderiza la escena con Three.js.
+2. `Game.tick` actualiza `player.abilities`; `PlayerController.updateMovement()` procesa WASD y consume entradas de habilidad nuevas.
+3. `Player.update()` aplica la orden temporal de movimiento de la habilidad y, si esta termina durante el frame, usa el tiempo restante para el movimiento WASD normal.
+4. Se actualizan seguimiento de camara, apuntado, mundo y `this.hud.update()`.
+5. Se renderiza la escena con Three.js.
 
 `PlayerHUD.update()` vuelve a consultar el dominio y modifica los nodos existentes. No vuelve a asignar `innerHTML`. `setText()` solo cambia el texto cuando ha cambiado el valor formateado; el ancho de la barra tampoco se reasigna si es igual.
 
 Los botones y casillas llaman tambien a `update()` al terminar. Asi se ve su resultado inmediatamente, incluso antes del siguiente frame. Si otro sistema modifica estadisticas, el siguiente `Game.tick` recoge el cambio.
 
+La seccion `.hud-abilities` se crea una vez desde los estados de `AbilityManager`. Cada frame `updateAbilities()` consulta estados nuevos y modifica texto/clase del nodo existente. Dash muestra `DASH`, `SHIFT`, `DASHING`, `DISPONIBLE`, cooldown restante o `SIN ENERGIA`.
+
 No se necesita `requestAnimationFrame`, `setInterval` ni otro `setAnimationLoop` en `PlayerHUD`: `Game` ya organiza el ciclo completo. La transicion de las barras la realiza CSS.
+
+`Game.tick` llama a `player.abilities.update(deltaTime)` cada frame. Despues, `PlayerController` consulta `AbilityManager.getInputBindings()`; no tiene una condicion dedicada a Dash. `Player.update()` consume la orden temporal de movimiento de la habilidad en el mismo frame.
 
 ### Destruccion
 
@@ -281,13 +296,16 @@ Sin mantener teclas pulsadas, estas funciones pueden ejecutarse en la consola de
 const checks = await import('/src/core/CharacterStats.check.ts')
 checks.runCharacterStatsChecks()
 checks.runPlayerHUDChecks()
+checks.runAbilityChecks()
 ```
 
-La segunda funcion usa un contenedor temporal fuera de pantalla y lo destruye al terminar. Comprueba recursos, nodos reutilizados, F3, repeticiones, mejoras sin acumulacion, movimiento con mejora, eventos y limpieza. Sus eventos F3 tambien alcanzan el HUD de la partida; las alternancias se hacen por pares para restaurar el estado inicial en una ejecucion correcta.
+`runPlayerHUDChecks()` usa un contenedor temporal fuera de pantalla y lo destruye al terminar. Comprueba recursos, nodos reutilizados, F3, repeticiones, mejoras sin acumulacion, movimiento con mejora, eventos y limpieza.
 
-Validado en esta implementacion: build correcto, 115 comprobaciones de estadisticas y 27 del HUD. Se probaron controles en navegador, capturas de escritorio/movil y limites de distribucion a 320x568, 390x844, 844x390 y 1440x900. Se verifico el enlace de `Game.tick` con frames controlados, incluyendo movimiento y pixeles no vacios de WebGL; esto no equivale a certificar animacion continua con la pestana oculta.
+`runAbilityChecks()` comprueba el coste, falta de energia, cooldown, bloqueo de activacion simultanea, duracion, reactivacion, movimiento normal y consistencia con distintos `deltaTime`. Tambien prueba obstaculos `Box2`, ShiftLeft a traves de `PlayerController`, WASD posterior y continuidad del apuntado.
 
-Vite advierte del bundle mayor de 500 kB. No hay framework ni script de tests; las funciones anteriores son comprobaciones manuales ejecutables. No se han anadido dependencias, disparos, enemigos, habilidades, cooldowns, inventario ni regeneracion.
+En la fase 3B se verificaron 115 comprobaciones de estadisticas y 27 del HUD. Para el estado de fase 3C ejecuta las tres funciones y `npm run build`; no se atribuyen resultados de pruebas que aun no se hayan ejecutado.
+
+Vite puede advertir del bundle mayor de 500 kB. No hay framework ni script de tests; las funciones anteriores son comprobaciones manuales ejecutables. No se han anadido dependencias, disparos, enemigos, escudos, teletransporte ni regeneracion.
 
 ## Antes de modificarlo por tu cuenta
 
@@ -298,3 +316,38 @@ Deberias poder explicar estas cinco ideas:
 3. Los porcentajes de dominio, el formato de texto y el ancho visual son conceptos distintos.
 4. Los eventos de una interfaz superpuesta deben aislarse sin perder las liberaciones de teclas.
 5. Cada listener y modificador creado por el HUD tiene una limpieza correspondiente en `destroy()`.
+
+## Fase 3C: Habilidades y Dash
+
+### Archivos de habilidades
+
+- `src/abilities/Ability.types.ts` define `AbilityDefinition`, `AbilityState`, `AbilityActivationContext`, `AbilityMovement` y el resultado discriminado `AbilityActivationResult`.
+- `src/abilities/Ability.ts` valida estado activo, cooldown y energia. El coste se descuenta con `CharacterStats.spendEnergy()` una sola vez si la activacion es valida.
+- `src/abilities/AbilityManager.ts` registra factories, busca IDs, activa habilidades, avanza cooldowns y publica estados.
+- `src/abilities/DashAbility.ts` guarda la direccion y el tiempo restante, y entrega un tramo temporal de movimiento cuando `Player` lo solicita.
+- `src/config/abilities.config.ts` centraliza `DASH_ABILITY_CONFIG` y `createPlayerAbilityFactories()`. Para registrar una nueva habilidad se agrega una factory ahi, sin cambiar `Game` ni incluir su ID en `PlayerController`.
+- `src/abilities/Ability.check.ts` expone `runAbilityChecks()` con comprobaciones manuales y sin framework.
+
+### Flujo del Dash
+
+1. `InputManager` registra WASD y conserva una pulsacion nueva hasta `consumePressed()`; key-repeat no crea nuevas pulsaciones.
+2. `PlayerController` obtiene las teclas mediante `AbilityManager.getInputBindings()`. Shift izquierdo se identifica como `ShiftLeft` y se presenta como `SHIFT`.
+3. La direccion WASD del frame se normaliza. Si es cero, `Player.resolveMovementDirection()` usa la ultima direccion valida; antes del primer movimiento se usa la orientacion inicial.
+4. `AbilityManager.tryActivate()` entrega el contexto a la habilidad. `Ability` rechaza ejecucion activa, cooldown o energia insuficiente antes de gastar recursos.
+5. Si se acepta, `DashAbility` fija la direccion, `CharacterStats.spendEnergy(25)` descuenta energia una vez y comienza el cooldown configurado.
+6. `Player.update()` obtiene el tramo temporal de `AbilityManager.consumeMovement()`. Dash avanza a 16 unidades/s hasta 0.18 s. Si termina antes del delta del frame, Player dedica el tiempo sobrante al movimiento WASD normal.
+7. El mismo `move()` paso a paso comprueba ambos ejes contra los `THREE.Box2` del mundo. El Dash no atraviesa obstaculos y no cambia `Player.speed`.
+8. `PlayerHUD.update()` muestra el estado consultado del manager. No gasta energia, no controla cooldowns ni altera el movimiento.
+
+El cooldown dura 3 s y empieza al aceptar la activacion; `AbilityManager.update(deltaTime)` lo descuenta en frames posteriores. No hay reembolso si una pared acorta el desplazamiento. No se implementan invulnerabilidad, particulas, animaciones complejas ni cooldown visual en la barra.
+
+### Prueba manual
+
+1. Ejecuta `npm run dev` y abre la URL que imprime Vite.
+2. Pulsa Shift izquierdo mientras juegas: deberias avanzar en la direccion WASD actual.
+3. Pulsa Shift sin WASD: se usa la ultima direccion de movimiento, o la orientacion inicial si aun no te moviste.
+4. Observa `DASHING`, el gasto de 25 de energia y el cooldown. Repetir Shift mientras sigue pulsado no reactiva la habilidad.
+5. Espera el cooldown y vuelve a activarlo. Usa F3 para restaurar energia o dejarla por debajo de 25 y comprobar `SIN ENERGIA`.
+6. Manten WASD despues del Dash y mueve el raton: el control normal y el apuntado deben continuar.
+
+La seccion nueva fija su propio tamano de texto. Se conserva el `font-size: 148px` actualmente definido en `.player-hud`, que no forma parte de esta fase.

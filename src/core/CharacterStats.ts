@@ -22,6 +22,10 @@ export class CharacterStats {
     return this.energy
   }
 
+  get isAlive(): boolean {
+    return this.health > 0
+  }
+
   getStat(stat: StatKey): number {
     return this.effective[stat]
   }
@@ -46,7 +50,7 @@ export class CharacterStats {
 
   spendEnergy(amount: number): boolean {
     this.validateAmount(amount)
-    if (amount > this.energy) return false
+    if (!this.isAlive || amount > this.energy) return false
     this.energy -= amount
     return true
   }
