@@ -6,6 +6,7 @@ import type { Wallet } from '../loot/Wallet'
 import type { WaveManager } from '../waves/WaveManager'
 import type { WaveState } from '../waves/Wave.types'
 import type { StatKey, StatModifier } from '../core/CharacterStats.types'
+import type { DebugLayerId } from '../core/GameDebugVisualization'
 import './player-hud.css'
 
 const DEBUG_MODIFIERS = {
@@ -20,6 +21,11 @@ const DEBUG_STATS: readonly { key: StatKey; label: string }[] = [
   { key: 'criticalChance', label: 'Critico' },
 ]
 
+export interface PlayerHUDDebugTools {
+  readonly setLayer: (layer: DebugLayerId, visible: boolean) => void
+  readonly spawnEffect: () => void
+}
+
 export class PlayerHUD {
   private readonly root = document.createElement('section')
   private readonly stats: CharacterStats
@@ -33,6 +39,7 @@ export class PlayerHUD {
   private readonly energyBar: HTMLElement
   private readonly readouts = new Map<string, HTMLElement[]>()
   private readonly toggles: HTMLInputElement[]
+  private readonly debugTools?: PlayerHUDDebugTools
   private readonly abilityReadouts = new Map<string, HTMLElement>()
   private readonly events = new AbortController()
   private readonly numberFormat = new Intl.NumberFormat('es', { maximumFractionDigits: 2 })
@@ -40,13 +47,14 @@ export class PlayerHUD {
   private previousFocus: HTMLElement | null = null
   private destroyed = false
 
-  constructor(container: HTMLElement, stats: CharacterStats, abilities: AbilityManager, enemies?: EnemyManager, wallet?: Wallet, loot?: LootManager, waves?: WaveManager) {
+  constructor(container: HTMLElement, stats: CharacterStats, abilities: AbilityManager, enemies?: EnemyManager, wallet?: Wallet, loot?: LootManager, waves?: WaveManager, debugTools?: PlayerHUDDebugTools) {
     this.stats = stats
     this.abilities = abilities
     this.enemies = enemies
     this.wallet = wallet
     this.loot = loot
     this.waves = waves
+    this.debugTools = debugTools
     this.root.className = 'player-hud'
     this.root.setAttribute('aria-label', 'Estadisticas del personaje')
     this.root.innerHTML = `
@@ -73,6 +81,16 @@ export class PlayerHUD {
           <label><input type="checkbox" data-modifier="speed">Velocidad +20%</label>
           <label><input type="checkbox" data-modifier="damage">Dano +50%</label>
         </div>
+        ${this.debugTools ? `<fieldset class="hud-debug__visuals"><legend>VISTA DE ESCENA</legend>
+          <label><input type="checkbox" data-debug-layer="world-colliders">Colliders del escenario</label>
+          <small class="hud-debug__legend">Rojo: rocas · violeta: cristal · ambar: resto</small>
+          <label><input type="checkbox" data-debug-layer="enemy-colliders">Colliders de enemigos</label>
+          <label><input type="checkbox" data-debug-layer="routes">Rutas y waypoints</label>
+          <label><input type="checkbox" data-debug-layer="line-of-sight">Linea de vision</label>
+          <label><input type="checkbox" data-debug-layer="effect-origins">Origenes de efectos</label>
+          <label><input type="checkbox" data-debug-layer="projectile-trajectories">Trayectorias de proyectil</label>
+          <button type="button" data-action="debug-vfx">Probar destello + polvo</button>
+        </fieldset>` : ''}
         <button class="hud-debug__refill" type="button" data-action="refill">Restaurar vida y energia</button>
       </section>
       <div class="hud-telemetry">
@@ -112,6 +130,7 @@ export class PlayerHUD {
     const options = { signal: this.events.signal }
     this.panel.addEventListener('click', this.onAction, options)
     this.panel.addEventListener('change', this.onModifierChange, options)
+    this.panel.addEventListener('change', this.onDebugLayerChange, options)
     for (const name of ['pointerdown', 'pointerup', 'pointermove', 'mousedown', 'mouseup', 'mousemove', 'click', 'dblclick', 'wheel', 'contextmenu', 'keydown']) {
       this.panel.addEventListener(name, this.stopPropagation, options)
     }
@@ -128,7 +147,9 @@ export class PlayerHUD {
     this.setText('gold', this.numberFormat.format(this.wallet?.balance ?? 0))
     const wave = this.waves?.getSnapshot()
     if (wave) {
-      this.setText('wave-number', `${wave.waveNumber} / ${wave.totalWaves}`)
+      this.setText('wave-number', wave.totalWaves === 0
+        ? wave.waveNumber === 0 ? 'PREPARANDO' : `${wave.waveNumber} / ∞`
+        : `${wave.waveNumber} / ${wave.totalWaves}`)
       this.setText('wave-enemies', String(wave.enemiesRemaining))
       this.setText('wave-state', this.formatWaveState(wave.state))
     }
@@ -191,7 +212,7 @@ export class PlayerHUD {
       let status: string
       if (state.active) {
         label = 'active'
-        status = 'DASHING'
+        status = state.detail ?? 'ACTIVA'
       } else if (!state.energySufficient) {
         label = 'insufficient-energy'
         status = state.cooldownRemaining > 0
@@ -202,7 +223,7 @@ export class PlayerHUD {
         status = `RECARGA ${this.numberFormat.format(Math.ceil(state.cooldownRemaining * 10) / 10)}s`
       } else {
         label = 'ready'
-        status = 'DISPONIBLE'
+        status = state.detail ?? 'DISPONIBLE'
       }
       const element = this.abilityReadouts.get(state.id)
       if (element) {
@@ -272,6 +293,7 @@ export class PlayerHUD {
       case 'debug-health': this.loot?.spawnDebugPickup('health'); break
       case 'debug-energy': this.loot?.spawnDebugPickup('energy'); break
       case 'debug-gold': this.loot?.spawnDebugPickup('gold'); break
+      case 'debug-vfx': this.debugTools?.spawnEffect(); break
       case 'close': this.setDebugOpen(false); break
     }
     this.update()
@@ -287,5 +309,13 @@ export class PlayerHUD {
     if (toggle.checked && !active) this.stats.addModifier(modifier)
     if (!toggle.checked && active) this.stats.removeModifier(modifier.id)
     this.update()
+  }
+
+  private readonly onDebugLayerChange = (event: Event): void => {
+    const input = event.target
+    if (!(input instanceof HTMLInputElement)) return
+    const layer = input.dataset.debugLayer as DebugLayerId | undefined
+    if (!layer) return
+    this.debugTools?.setLayer(layer, input.checked)
   }
 }

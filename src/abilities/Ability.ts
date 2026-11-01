@@ -38,6 +38,7 @@ export abstract class Ability {
       energySufficient,
       cooldownRemaining: this.cooldownRemaining,
       energyCost: this.definition.energyCost,
+      detail: this.getStatusDetail(),
     }
   }
 
@@ -64,6 +65,14 @@ export abstract class Ability {
 
   consumeMovement(_deltaTime: number): AbilityMovement | null {
     return null
+  }
+
+  absorbDamage(_amount: number): number {
+    return 0
+  }
+
+  protected getStatusDetail(): string | undefined {
+    return undefined
   }
 
   cancel(): void {

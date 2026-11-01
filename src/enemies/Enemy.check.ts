@@ -3,6 +3,7 @@ import { CombatSystem } from '../combat/CombatSystem'
 import type { CombatSource } from '../combat/Combat.types'
 import { REVOLVER_ATTACK, PLAYER_COMBAT_SOURCE } from '../config/combat.config'
 import { ENEMY_DEFINITIONS } from '../config/enemies.config'
+import { VISUAL_THEME } from '../config/visualTheme'
 import { Player } from '../entities/Player'
 import { EnemyAttackController } from './EnemyAttackController'
 import { EnemyManager } from './EnemyManager'
@@ -37,8 +38,10 @@ export function runEnemyChecks(): string {
     check(manager.aliveCount === 2 && crawlerA.combatId !== crawlerB.combatId, 'Manager creates unique instances from one definition')
     close(crawlerA.currentHealth, 45, 'First crawler starts with configured health')
     crawlerA.applyDamage({ sourceId: player.combatId, sourceFaction: player.faction, amount: 10, type: 'physical' })
+    const crawlerBoundsAfterHit = crawlerA.getCombatBounds()
     close(crawlerA.currentHealth, 35, 'Damage changes only the hit crawler')
     close(crawlerB.currentHealth, 45, 'Sibling crawler keeps independent health')
+    check(crawlerBoundsAfterHit.x === crawlerA.root.position.x && crawlerBoundsAfterHit.z === crawlerA.root.position.z, 'Hit feedback leaves the collision root unchanged')
     crawlerA.root.position.set(4, 0, player.position.z)
     const healthBeforeBullet = crawlerA.currentHealth
     combat.spawnProjectile(REVOLVER_ATTACK, PLAYER_COMBAT_SOURCE, new THREE.Vector3(10, 1, player.position.z), new THREE.Vector3(-1, 0, 0))
@@ -58,17 +61,31 @@ export function runEnemyChecks(): string {
     crawlerB.root.position.copy(undetectedStart)
 
     const crawlerSource: CombatSource = { id: 'enemy.crawler.check', faction: 'enemies' }
-    const melee = new EnemyAttackController(crawlerDefinition.attacks, crawlerSource, combat)
+    const meleePhases: string[] = []
+    const melee = new EnemyAttackController(crawlerDefinition.attacks, crawlerSource, combat, (_attackId, phase) => {
+      meleePhases.push(phase ?? 'idle')
+    })
     const origin = new THREE.Vector3(player.position.x + 1, 1, player.position.z)
     const playerHealth = player.stats.currentHealth
     check(melee.selectAttack(1)?.id === 'claw', 'Melee attack is selected inside its range')
     check(melee.selectAttack(1.6) === null, 'Attack is rejected outside configured range')
-    check(melee.update(0, true, 1, origin, player.position, player) === 'claw', 'Ready melee attack executes')
-    close(player.stats.currentHealth, playerHealth - 10, 'Melee damage uses the player CharacterStats')
-    close(melee.getCooldownRemaining('claw'), 1.5, 'Melee cooldown starts after activation')
-    check(melee.update(0.5, true, 1, origin, player.position, player) === null, 'Melee cooldown prevents repeated attack')
+    check(melee.update(0, true, 1, origin, player.position, player) === 'claw', 'Selected melee attack begins its telegraph')
+    check(melee.getPhaseState()?.phase === 'windup', 'Melee begins in windup phase')
+    close(player.stats.currentHealth, playerHealth, 'Windup does not apply melee damage')
+    melee.update(crawlerDefinition.attacks[0].windupSeconds!, true, 1, origin, player.position, player)
+    check(melee.getPhaseState()?.phase === 'active', 'Melee transitions to its active hit phase')
+    close(player.stats.currentHealth, playerHealth - 10, 'Melee damage occurs on active phase only')
+    melee.update(crawlerDefinition.attacks[0].activeSeconds!, true, 1, origin, player.position, player)
+    check(melee.getPhaseState()?.phase === 'recovery', 'Melee enters recovery after one hit')
+    close(player.stats.currentHealth, playerHealth - 10, 'Active duration does not repeat melee damage')
+    melee.update(crawlerDefinition.attacks[0].recoverySeconds!, true, 1, origin, player.position, player)
+    check(melee.getPhaseState()?.phase === 'cooldown', 'Melee recovery transitions to cooldown')
+    check(meleePhases.slice(0, 4).join(',') === 'windup,active,recovery,cooldown', 'Melee emits the configured phase sequence')
+    close(melee.getCooldownRemaining('claw'), 1.5, 'Melee cooldown begins after recovery')
+    check(melee.update(0.5, true, 1, origin, player.position, player) === null, 'Melee cooldown prevents a new telegraph')
     close(player.stats.currentHealth, playerHealth - 10, 'Cooldown rejection causes no extra damage')
-    check(melee.update(1, true, 1, origin, player.position, player) === 'claw', 'Melee can attack again after cooldown')
+    melee.update(1, true, 1, origin, player.position, player)
+    check(melee.getPhaseState()?.phase === 'windup', 'Melee can telegraph again after cooldown')
 
     const keepDistance = new KeepDistanceBehavior(7, 0.4)
     const desired = new THREE.Vector3()
@@ -92,15 +109,28 @@ export function runEnemyChecks(): string {
     const plasma = outlawDefinition.attacks.find((attack) => attack.id === 'plasma-shot')!
     const plasmaOrigin = new THREE.Vector3(player.position.x + 9, 1.2, player.position.z)
     const plasmaPlayerHealth = player.stats.currentHealth
-    check(outlawAttacks.update(0, true, 9, plasmaOrigin, player.position, player) === 'plasma-shot', 'Outlaw executes configured plasma attack')
-    close(outlawAttacks.getCooldownRemaining('plasma-shot'), 2, 'Plasma cooldown starts on execution')
+    check(outlawAttacks.update(0, true, 9, plasmaOrigin, player.position, player) === 'plasma-shot', 'Outlaw starts its plasma windup')
+    check(outlawAttacks.getPhaseState()?.phase === 'windup' && combat.projectileCount === 0, 'Plasma windup does not spawn projectiles early')
+    close(player.stats.currentHealth, plasmaPlayerHealth, 'Plasma windup does not cause damage')
+    outlawAttacks.update(plasma.windupSeconds!, true, 9, plasmaOrigin, player.position, player)
+    check(outlawAttacks.getPhaseState()?.phase === 'active' && combat.projectileCount === 1, 'Plasma active phase fires the first configured shot')
+    outlawAttacks.update(plasma.burstIntervalSeconds! - 0.01, true, 9, plasmaOrigin, player.position, player)
+    check(combat.projectileCount === 1, 'Burst interval delays the next plasma shot')
+    outlawAttacks.update(0.01, true, 9, plasmaOrigin, player.position, player)
+    check(combat.projectileCount === 2, 'Second plasma shot follows its configured interval')
+    outlawAttacks.update(plasma.burstIntervalSeconds!, true, 9, plasmaOrigin, player.position, player)
+    check(combat.projectileCount === 3, 'Configured plasma burst contains three shots')
+    outlawAttacks.update(plasma.activeSeconds!, true, 9, plasmaOrigin, player.position, player)
+    check(outlawAttacks.getPhaseState()?.phase === 'recovery', 'Plasma burst enters recovery after its active window')
+    outlawAttacks.update(plasma.recoverySeconds!, true, 9, plasmaOrigin, player.position, player)
+    check(outlawAttacks.getPhaseState()?.phase === 'cooldown', 'Plasma recovery starts its cooldown')
     check(outlawAttacks.update(1.9, true, 9, plasmaOrigin, player.position, player) === null, 'Plasma cooldown blocks premature re-use')
-    check(outlawAttacks.update(0.1, true, 9, plasmaOrigin, player.position, player) === 'plasma-shot', 'Plasma becomes available when its cooldown expires')
+    check(outlawAttacks.update(0.1, true, 9, plasmaOrigin, player.position, player) === 'plasma-shot', 'Plasma can telegraph again when cooldown expires')
     const plasmaMesh = scene.getObjectByName('Projectile:enemy.plasma') as THREE.Mesh | null
     check(plasmaMesh !== null, 'Enemy plasma reuses CombatSystem projectile creation')
-    check((plasmaMesh!.material as THREE.MeshStandardMaterial).color.getHexString() === 'e5b4ff', 'Plasma has a distinct projectile material')
+    check((plasmaMesh!.material as THREE.MeshStandardMaterial).color.getHexString() === VISUAL_THEME.colors.plasmaCore.slice(1), 'Plasma uses its centralized projectile color')
     combat.update(1, false, new THREE.Vector3(0, 1, 0), new THREE.Vector3(1, 0, 0))
-    close(player.stats.currentHealth, plasmaPlayerHealth - plasma.damage * 2, 'Plasma projectiles apply damage to Player')
+    close(player.stats.currentHealth, plasmaPlayerHealth - plasma.damage * 3, 'Plasma burst projectiles apply configured damage to Player')
     check(combat.projectileCount === 0, 'Plasma projectile is removed after impact')
 
     const blocker = new THREE.Box2(new THREE.Vector2(4, -1), new THREE.Vector2(5, 1))
@@ -135,14 +165,23 @@ export function runEnemyChecks(): string {
 
     const deathTarget = manager.spawn(crawlerDefinition.id, new THREE.Vector3(25, 0, 12))
     const deathId = deathTarget.combatId
+    const deathBounds = deathTarget.getCombatBounds()
     deathTarget.applyDamage({ sourceId: 'player', sourceFaction: 'player', amount: 45, type: 'physical' })
     check(deathTarget.isDead && deathTarget.state === 'dead', 'Enemy reaches dead state at zero health')
     check(manager.getAlive().every((enemy) => enemy.combatId !== deathId), 'Dead enemy is removed from manager immediately')
-    check(!scene.children.includes(deathTarget.root), 'Dead enemy visual is removed from scene')
+    check(scene.children.includes(deathTarget.root) && manager.dyingCount === 1, 'Dead enemy is excluded from combat while its death animation remains visible')
     check(deathEvents.at(-1)?.enemyId === deathId && deathEvents.at(-1)?.lootTableId === crawlerDefinition.lootTableId, 'Death event contains identity and future loot table reference')
     const eventCount = deathEvents.length
     deathTarget.applyDamage({ sourceId: 'player', sourceFaction: 'player', amount: 45, type: 'physical' })
     check(deathEvents.length === eventCount, 'Death event is emitted only once')
+    const healthAfterDeath = player.stats.currentHealth
+    deathTarget.update(1, player, [])
+    close(player.stats.currentHealth, healthAfterDeath, 'Dead enemy cannot attack during its death animation')
+    manager.update(0.2)
+    const animatedBounds = deathTarget.getCombatBounds()
+    check(animatedBounds.x === deathBounds.x && animatedBounds.z === deathBounds.z && animatedBounds.radius === deathBounds.radius, 'Death animation never changes enemy collider bounds')
+    manager.update(0.2)
+    check(manager.dyingCount === 0 && !scene.children.includes(deathTarget.root), 'Dead visual releases after its animation duration')
 
     const healthBeforeFriendly = player.stats.currentHealth
     player.applyDamage({ sourceId: 'enemy.friendly', sourceFaction: 'player', amount: 50, type: 'physical' })

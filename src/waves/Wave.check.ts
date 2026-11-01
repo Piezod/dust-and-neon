@@ -7,6 +7,7 @@ import { Player } from '../entities/Player'
 import { EnemyManager } from '../enemies/EnemyManager'
 import { WaveManager } from './WaveManager'
 import type { WaveDefinition } from './Wave.types'
+import { GameEventBus } from '../events/GameEventBus'
 
 export function runWaveChecks(): string {
   let checks = 0
@@ -52,6 +53,44 @@ export function runWaveChecks(): string {
     enemies.dispose()
     combat.dispose()
     player.dispose()
+  }
+
+  const infiniteScene = new THREE.Scene()
+  const infinitePlayer = new Player()
+  infiniteScene.add(infinitePlayer.root)
+  const infiniteCombat = new CombatSystem(infiniteScene, [], REVOLVER_ATTACK, PLAYER_COMBAT_SOURCE, () => infinitePlayer.stats.isAlive)
+  infiniteCombat.registerTarget(infinitePlayer)
+  const infiniteEvents = new GameEventBus()
+  const infiniteEnemies = new EnemyManager(infiniteScene, [], infiniteCombat, infinitePlayer, definitions)
+  const infiniteWaves = new WaveManager(WAVE_DEFINITIONS, infiniteEnemies, { infinite: true, events: infiniteEvents, maxAlive: 2 })
+  const observedEvents: string[] = []
+  infiniteEvents.subscribe((event) => observedEvents.push(event.type))
+  try {
+    check(infiniteWaves.getSnapshot().totalWaves === 0 && !infiniteWaves.getSnapshot().runComplete, 'Infinite mode has no finite run completion')
+    infiniteWaves.update(WAVE_DEFINITIONS[0].preparationSeconds, true, infinitePlayer.position)
+    check(observedEvents.filter((type) => type === 'wave-started').length === 1, 'Infinite wave start emits once after preparation')
+    for (let frame = 0; frame < 60; frame++) infiniteWaves.update(0.1, true, infinitePlayer.position)
+    check(infiniteEnemies.aliveCount === 2 && infiniteWaves.getSnapshot().spawnsPending > 0, 'Infinite spawn loop respects the active-enemy cap')
+    for (let frame = 0; frame < 20 && infiniteWaves.state !== 'completed'; frame++) {
+      for (const enemy of infiniteEnemies.getAlive()) {
+        enemy.applyDamage({ sourceId: infinitePlayer.combatId, sourceFaction: infinitePlayer.faction, amount: 1000, type: 'physical' })
+      }
+      infiniteWaves.update(0.5, true, infinitePlayer.position)
+    }
+    check(infiniteWaves.state === 'completed', 'Capped infinite wave completes after all pending spawns are defeated')
+    check(observedEvents.filter((type) => type === 'wave-completed').length === 1, 'Infinite wave completion emits once')
+    infiniteWaves.update(WAVE_DEFINITIONS[0].completionSeconds, true, infinitePlayer.position)
+    check(infiniteWaves.state === 'upgrades', 'Infinite mode preserves intermission between waves')
+    infiniteWaves.completeIntermission()
+    check(infiniteWaves.getSnapshot().waveNumber === 2 && infiniteWaves.getSnapshot().spawnsPending === 8, 'Infinite wave generation scales the next wave')
+    infiniteWaves.update(WAVE_DEFINITIONS[1].preparationSeconds, true, infinitePlayer.position)
+    check(observedEvents.filter((type) => type === 'wave-started').length === 2, 'Each infinite wave start emits once')
+  } finally {
+    infiniteWaves.dispose()
+    infiniteEnemies.dispose()
+    infiniteCombat.dispose()
+    infinitePlayer.dispose()
+    infiniteEvents.clear()
   }
 
   const smallWave: WaveDefinition = {

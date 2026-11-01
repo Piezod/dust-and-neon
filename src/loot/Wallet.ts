@@ -29,6 +29,11 @@ export class Wallet {
     return true
   }
 
+  reset(): void {
+    this.balanceValue = 0
+    this.notify()
+  }
+
   subscribe(listener: WalletListener): () => void {
     this.listeners.add(listener)
     listener(this.balanceValue)

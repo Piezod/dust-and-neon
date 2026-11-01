@@ -4,8 +4,9 @@ import { CharacterStats } from '../core/CharacterStats'
 import { PLAYER_BASE_STATS } from '../config/player.config'
 import { AbilityManager } from '../abilities/AbilityManager'
 import { createPlayerAbilityFactories } from '../config/abilities.config'
-import type { CombatBounds, DamageContext } from '../combat/Combat.types'
+import type { CombatBounds, DamageContext, DamageStatusApplication, DamageType } from '../combat/Combat.types'
 import type { Damageable } from '../combat/Damageable'
+import { StatusEffects } from '../combat/StatusEffects'
 
 export class Player implements Damageable {
   readonly combatId = 'player'
@@ -13,6 +14,7 @@ export class Player implements Damageable {
   readonly root = new THREE.Group()
   readonly position = this.root.position
   readonly velocity = new THREE.Vector3()
+  private readonly statusEffects = new StatusEffects()
   readonly stats = new CharacterStats(PLAYER_BASE_STATS)
   readonly abilities = new AbilityManager(createPlayerAbilityFactories(this.stats))
   readonly radius = 0.43
@@ -37,11 +39,23 @@ export class Player implements Damageable {
   }
 
   get speed(): number {
-    return this.stats.getStat('moveSpeed')
+    return this.stats.getStat('moveSpeed') * this.statusEffects.movementMultiplier
+  }
+
+  get activeStatusEffects(): readonly DamageStatusApplication['type'][] {
+    return this.statusEffects.activeTypes
+  }
+
+  get isStaggered(): boolean {
+    return this.statusEffects.isStaggered
   }
 
   getMuzzlePosition(target: THREE.Vector3): THREE.Vector3 {
     return this.visual.getMuzzleWorldPosition(target)
+  }
+
+  setShieldVisual(active: boolean, remainingCapacity: number, maximumCapacity: number): void {
+    this.visual.setShield(active, maximumCapacity > 0 ? remainingCapacity / maximumCapacity : 0)
   }
 
   getCombatBounds(): CombatBounds {
@@ -50,7 +64,17 @@ export class Player implements Damageable {
 
   applyDamage(context: DamageContext): void {
     if (context.sourceId === this.combatId || context.sourceFaction === this.faction) return
-    this.stats.takeDamage(context.amount)
+    const remaining = Math.max(0, context.amount - this.abilities.absorbDamage(context.amount))
+    if (remaining > 0) this.stats.takeDamage(remaining)
+  }
+
+  getDamageMultiplier(_type: DamageType, _sourcePosition?: readonly [number, number, number]): number {
+    return 1
+  }
+
+  applyStatusEffect(effect: DamageStatusApplication, source: { readonly id: string; readonly faction: string }): void {
+    if (!this.isAlive) return
+    this.statusEffects.apply(effect, source)
   }
 
   resolveMovementDirection(direction: THREE.Vector3): { readonly x: number; readonly z: number } {
@@ -61,7 +85,13 @@ export class Player implements Damageable {
   update(direction: THREE.Vector3, deltaTime: number, obstacles: readonly THREE.Box2[]): void {
     this.previousPosition.copy(this.position)
     const elapsed = Math.max(0, deltaTime)
+    this.statusEffects.update(elapsed, (context) => this.applyDamage({ ...context, amount: context.amount * this.getDamageMultiplier(context.type, context.sourcePosition) }))
     if (!this.isAlive) {
+      this.velocity.set(0, 0, 0)
+      this.visual.update(elapsed, 0)
+      return
+    }
+    if (this.statusEffects.isStaggered) {
       this.velocity.set(0, 0, 0)
       this.visual.update(elapsed, 0)
       return
@@ -110,6 +140,7 @@ export class Player implements Damageable {
   }
 
   dispose(): void {
+    this.statusEffects.clear()
     this.visual.dispose()
     this.root.removeFromParent()
   }

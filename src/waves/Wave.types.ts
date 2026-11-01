@@ -1,9 +1,12 @@
+import type { EnemySpawnDifficulty } from '../enemies/Enemy.types'
+
 export type WaveState = 'preparation' | 'combat' | 'completed' | 'upgrades' | 'game-over'
 
 export interface WaveSpawnGroup {
   readonly enemyId: string
   readonly count: number
   readonly intervalSeconds: number
+  readonly difficulty?: EnemySpawnDifficulty
 }
 
 export interface WaveDefinition {

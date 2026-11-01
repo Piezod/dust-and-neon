@@ -52,4 +52,16 @@ export class AbilityManager {
     }
     return null
   }
+
+  absorbDamage(amount: number): number {
+    let remaining = Math.max(0, Number.isFinite(amount) ? amount : 0)
+    let absorbed = 0
+    for (const ability of this.abilities.values()) {
+      const current = ability.absorbDamage(remaining)
+      remaining -= current
+      absorbed += current
+      if (remaining <= 0) break
+    }
+    return absorbed
+  }
 }

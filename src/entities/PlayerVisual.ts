@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { VISUAL_THEME } from '../config/visualTheme'
 
 export class PlayerVisual {
   readonly root = new THREE.Group()
@@ -9,6 +10,8 @@ export class PlayerVisual {
   private readonly rightArm = new THREE.Group()
   private readonly muzzle = new THREE.Object3D()
   private readonly coatTails: THREE.Group[] = []
+  private readonly shieldDome: THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial>
+  private readonly shieldRing: THREE.Mesh<THREE.TorusGeometry, THREE.MeshBasicMaterial>
   private readonly geometries = new Set<THREE.BufferGeometry>()
   private readonly materials = new Set<THREE.Material>()
   private walkBlend = 0
@@ -18,15 +21,15 @@ export class PlayerVisual {
   constructor() {
     this.root.name = 'GunslingerVisual'
     this.root.add(this.body)
-    const coat = this.material('#382b28')
-    const leather = this.material('#72503a')
-    const trousers = this.material('#344b4d')
+    const coat = this.material(VISUAL_THEME.colors.earthDeep)
+    const leather = this.material(VISUAL_THEME.colors.leather)
+    const trousers = this.material(VISUAL_THEME.colors.metal)
     const boots = this.material('#21262a')
     const skin = this.material('#c99168')
-    const scarf = this.material('#b92e36')
-    const steel = this.material('#85999a', 0.65)
-    const gunmetal = this.material('#263f43', 0.65)
-    const neon = this.material('#16bda9', 0.2, '#0de0c1', 1.1)
+    const scarf = this.material(VISUAL_THEME.colors.danger)
+    const steel = this.material(VISUAL_THEME.colors.metalLight, 0.65)
+    const gunmetal = this.material(VISUAL_THEME.colors.metal, 0.65)
+    const neon = this.material(VISUAL_THEME.colors.cyan, 0.2, VISUAL_THEME.colors.cyan, 1.1)
 
     this.box(this.body, coat, 0.86, 0.75, 0.48, 0, 1.57, 0)
     this.box(this.body, trousers, 0.49, 0.62, 0.06, 0, 1.54, 0.26)
@@ -89,6 +92,18 @@ export class PlayerVisual {
     this.muzzle.name = 'RevolverMuzzle'
     this.muzzle.position.set(0, 0.09, 0.68)
     revolver.add(this.muzzle)
+    const shieldMaterial = new THREE.MeshBasicMaterial({ color: VISUAL_THEME.colors.cyan, wireframe: true, transparent: true, opacity: 0.28, depthWrite: false, toneMapped: false })
+    this.materials.add(shieldMaterial)
+    this.shieldDome = this.mesh(new THREE.SphereGeometry(1, 12, 8), shieldMaterial, this.root, 0, 1.15, 0) as THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial>
+    this.shieldDome.scale.set(1.1, 1.45, 1.1)
+    this.shieldDome.visible = false
+    this.shieldDome.renderOrder = 8
+    const ringMaterial = new THREE.MeshBasicMaterial({ color: VISUAL_THEME.colors.cyan, transparent: true, opacity: 0.5, depthWrite: false, toneMapped: false })
+    this.materials.add(ringMaterial)
+    this.shieldRing = this.mesh(new THREE.TorusGeometry(1, 0.055, 6, 28), ringMaterial, this.root, 0, 0.08, 0) as THREE.Mesh<THREE.TorusGeometry, THREE.MeshBasicMaterial>
+    this.shieldRing.rotation.x = Math.PI / 2
+    this.shieldRing.visible = false
+    this.shieldRing.renderOrder = 8
   }
 
   private material(color: string, metalness = 0, emissive = '#000000', emissiveIntensity = 0): THREE.MeshStandardMaterial {
@@ -135,6 +150,14 @@ export class PlayerVisual {
     this.coatTails.forEach((tail, index) => {
       tail.rotation.x = Math.sin(this.stride + index * Math.PI) * this.walkBlend * 0.12
     })
+  }
+
+  setShield(active: boolean, capacityRatio: number): void {
+    this.shieldDome.visible = active
+    this.shieldRing.visible = active
+    const strength = THREE.MathUtils.clamp(capacityRatio, 0, 1)
+    this.shieldDome.material.opacity = 0.12 + strength * 0.28
+    this.shieldRing.material.opacity = 0.25 + strength * 0.5
   }
 
   getMuzzleWorldPosition(target: THREE.Vector3): THREE.Vector3 {

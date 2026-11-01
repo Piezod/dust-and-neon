@@ -6,12 +6,21 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "dev:worker": "wrangler dev --ip 0.0.0.0 --port 8787",
+    "dev:network": "concurrently -k -n frontend,worker \"vite --host 0.0.0.0 --port 5173\" \"wrangler dev --ip 0.0.0.0 --port 8787\"",
+    "typecheck:worker": "tsc --project worker/tsconfig.json",
+    "build:worker": "wrangler deploy --dry-run --outdir .wrangler/dry-run",
+    "test:multiplayer:worker": "node --test tests/multiplayer-worker.integration.mjs"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260702.1",
     "@types/three": "^0.186.0",
+    "concurrently": "^9.2.5",
     "typescript": "5.8.3",
-    "vite": "6.3.5"
+    "vite": "6.3.5",
+    "wrangler": "4.75.0",
+    "ws": "^8.18.0"
   },
   "dependencies": {
     "three": "^0.186.1"

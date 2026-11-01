@@ -11,6 +11,9 @@ import { runEnemyChecks } from '../enemies/Enemy.check'
 import { runLootChecks } from '../loot/Loot.check'
 import { runPlayerDeathChecks } from './PlayerDeath.check'
 import { runWaveChecks } from '../waves/Wave.check'
+import { runProgressionChecks } from '../progression/progression.check'
+import { runGameProgressionChecks } from '../progression/progression.check'
+import { runExtensibilityAndPerformanceChecks } from '../performance/Scale.check'
 import { DASH_ABILITY_CONFIG } from '../config/abilities.config'
 
 export function runCharacterStatsChecks(): string {
@@ -288,3 +291,6 @@ export { runEnemyChecks }
 export { runLootChecks }
 export { runPlayerDeathChecks }
 export { runWaveChecks }
+export { runProgressionChecks }
+export { runGameProgressionChecks }
+export { runExtensibilityAndPerformanceChecks }

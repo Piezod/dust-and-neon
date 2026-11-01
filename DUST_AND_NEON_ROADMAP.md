@@ -1,6 +1,6 @@
 # Dust & Neon — Roadmap de desarrollo del núcleo roguelike
 
-**Versión:** 1.0 · **Estado:** Fases 4A, 4B y 4C validadas por el usuario; 4D implementada y pendiente de validación visual.
+**Versión:** 1.0 · **Estado:** Fases 4A–4D validadas por el usuario; 4E implementada y pendiente de validación visual.
 
 > Este documento es la fuente de planificación para GitHub Copilot. Antes de cada fase, inspecciona el repositorio real. No marques una tarea como completada sin cambios verificables, pruebas ejecutadas y validación manual del usuario.
 
@@ -53,9 +53,9 @@ Game / Scene composition root
 | 4A · Disparo básico | Revólver que dispara hacia el cursor | ✅ Validada por el usuario |
 | 4B · Enemigos | Enemigos configurables con IA, ataques y daño | ✅ Validada por el usuario |
 | 4C · Botín | Vida, energía y oro recogibles con probabilidades | ✅ Validada por el usuario |
-| 4D · Oleadas | Spawns progresivos y fin de oleada | 🟨 Implementada; pendiente de validación visual del usuario |
-| 4E · Mejoras | Pantalla entre oleadas, oro, upgrades y perks | ⬜ Pendiente |
-| 4F · Extensibilidad | Segundo enemigo, ataques alternativos y balance | ⬜ Pendiente |
+| 4D · Oleadas | Spawns progresivos y fin de oleada | ✅ Validada por el usuario |
+| 4E · Mejoras | Pantalla entre oleadas, oro, upgrades y perks | 🟨 Implementada; pendiente de validación visual del usuario |
+| 4F · Extensibilidad | Segundo enemigo, ataques alternativos y balance | 🟨 Implementada; pendiente de validación visual del usuario |
 
 Para cada fase, Copilot debe actualizar la tabla y checklist **solo tras** completar los criterios de aceptación y recibir confirmación.
 
@@ -227,7 +227,7 @@ Para cada fase, Copilot debe actualizar la tabla y checklist **solo tras** compl
 - [x] Build y checks ejecutados.
 - [ ] Validación visual del usuario antes de 4E.
 
-### Resultado de implementación 4D (validación visual del usuario pendiente)
+### Resultado de implementación 4D (validada por el usuario)
 
 - `src/waves/` contiene tipos, `WaveManager` y checks; `src/config/waves.config.ts` define dos composiciones configurables.
 - `WaveManager` coordina `preparation` → `combat` → `completed` → `upgrades` → siguiente ola; entra en `game-over` al morir el jugador. El estado `upgrades` es una intermisión sin tienda ni compras.
@@ -236,7 +236,7 @@ Para cada fase, Copilot debe actualizar la tabla y checklist **solo tras** compl
 - El estado de muerte procede de `CharacterStats.isAlive` (`currentHealth > 0`), no de un booleano duplicado. `spendEnergy`, `Ability.activate`, `AbilityManager.cancelAll`, `PlayerController` y `CombatSystem` rechazan o cancelan acciones del jugador muerto. Los proyectiles ya existentes pueden continuar; se bloquea la creación de nuevos proyectiles del jugador.
 - Checks ejecutados: 116 estadísticas, 34 HUD, 29 habilidades, 31 combate, 44 enemigos, 43 loot, 12 de muerte y 17 de oleadas. Build estricto correcto; Vite conserva su advertencia por chunk mayor de 500 kB.
 - Pendientes sin fase asignada: pantalla Game Over, animación de muerte, menú de reinicio y reaparición. No se implementaron.
-- Pendiente la validación visual del usuario antes de iniciar 4E.
+- El usuario confirmó visualmente la Fase 4D el 2026-10-31.
 
 ---
 
@@ -256,12 +256,23 @@ Para cada fase, Copilot debe actualizar la tabla y checklist **solo tras** compl
 
 ### Checklist
 
-- [ ] Comprar solo con saldo suficiente.
-- [ ] Mejoras alteran parámetros reales de combate.
-- [ ] Sin modificar definiciones compartidas.
-- [ ] Perks aplicados una sola vez según reglas de apilamiento.
-- [ ] Reiniciar partida restablece progresión temporal.
-- [ ] Build, pruebas y aprobación.
+- [x] Comprar solo con saldo suficiente.
+- [x] Mejoras alteran parámetros reales de combate.
+- [x] Sin modificar definiciones compartidas.
+- [x] Perks aplicados una sola vez según reglas de apilamiento.
+- [x] Reiniciar partida restablece progresión temporal al crear una nueva instancia de Game/RunState; `RunState.reset()` revierte los efectos activos.
+- [x] Build y checks ejecutados.
+- [ ] Validación visual del usuario antes de 4F.
+
+### Resultado de implementación 4E (validación visual del usuario pendiente)
+
+- `src/progression/` contiene efectos tipados, `UpgradeManager`, `PerkManager`, `RunState` y checks; `src/config/progression.config.ts` centraliza costes, niveles, requisitos y perks.
+- Las mejoras modifican `CharacterStats` mediante IDs propios o el estado runtime de `AttackController`; `REVOLVER_ATTACK` y las definiciones globales permanecen inmutables.
+- `UpgradeManager` valida saldo, nivel máximo y prerequisitos antes de gastar. `PerkManager` aplica reglas unique/stackable y limita la elección por intermisión.
+- `RunState` posee la Wallet y progreso temporal; resetearlo revierte modifiers y vacía el saldo. No hay persistencia.
+- `WaveManager.completeIntermission()` enlaza el panel con la transición existente; hay botón Continuar y timeout de respaldo configurable. La UI presenta upgrades/perks y queda fuera de `Game.ts`.
+- Verificación ejecutada: build estricto correcto, con advertencia de Vite por chunk mayor de 500 kB. Checks agregados pasan: 116 estadísticas, 34 HUD, 29 habilidades, 31 combate, 44 enemigos, 43 loot, 12 muerte, 17 oleadas, 37 progresión y 1 integración de Game.
+- Pendiente la validación visual del usuario. No se ha comenzado la Fase 4F.
 
 ---
 
@@ -278,11 +289,251 @@ Para cada fase, Copilot debe actualizar la tabla y checklist **solo tras** compl
 
 ### Checklist
 
-- [ ] Nueva variante sin editar un `switch` central.
-- [ ] Dos ataques en un mismo enemigo y selección correcta.
-- [ ] Nuevo contenido añadido mayoritariamente por configuración.
-- [ ] Regresión completa y build.
-- [ ] Documento de extensibilidad y limitaciones.
+- [x] Nueva variante registrable por definición sin editar `Game.ts` ni un `switch` central.
+- [x] Dos ataques en un mismo enemigo y selección correcta.
+- [x] Nuevo contenido añadido mayoritariamente por configuración.
+- [x] Regresión completa y build.
+- [x] Documento de extensibilidad y limitaciones.
+- [ ] Validación visual del usuario antes de cualquier fase posterior.
+
+### Resultado de implementación 4F (validación visual del usuario pendiente)
+
+- El rastrero y el forajido mecánico existentes cubren las dos estrategias y las variantes pedidas; el forajido selecciona plasma o golpe cercano por rango, cooldown y prioridad. No se duplicó contenido que ya cumplía el alcance.
+- El check de extensibilidad registra una variante adicional por `EnemyDefinition` en un `EnemyManager` aislado y verifica ataques/upgrade/perk desde catálogos.
+- `src/performance/Scale.check.ts` mide 49 instancias de enemigo y 80 proyectiles durante 60 ticks de 0.02 s. La última ejecución Playwright midió 35.00 ms; es una referencia del entorno, no un umbral de hardware. No se observó evidencia que justifique pooling u otra optimización.
+- `docs/CONTENT_EXTENSION_GUIDE.md` documenta cómo añadir enemy, ataque, arma, loot y perk y describe límites actuales.
+- Verificación ejecutada: build estricto correcto, con advertencia de Vite por chunk mayor de 500 kB. Checks agregados pasan: 116 estadísticas, 34 HUD, 29 habilidades, 31 combate, 44 enemigos, 43 loot, 12 muerte, 17 oleadas, 37 progresión, 1 integración de Game y 11 de extensibilidad.
+- La Fase 4E continúa implementada y pendiente de validación visual. No se ha comenzado ninguna fase posterior.
+
+---
+
+## Ampliación de producto solicitada — menú y modos de partida
+
+**Asignación:** ampliación directa solicitada por el usuario; no forma parte ni cambia el estado de 4E o 4F.
+
+**Estado:** base funcional implementada; pendiente de validación en dispositivo móvil físico.
+
+### Alcance implementado
+
+- `ApplicationController` muestra el menú antes de crear `Game` o un renderer WebGL. Desde allí se accede a campaña, modo infinito, ajustes y logros; las vistas de resultados permiten reintentar o volver al menú.
+- La campaña incluye tres capítulos jugables con desbloqueo local secuencial. Cada capítulo usa su propia escena, dos encuentros de oleadas, intermisión de progresión y un jefe con tres fases.
+- El modo infinito genera oleadas en demanda a partir de las composiciones existentes. Aumenta cantidades y ritmo, amplía gradualmente el radio de aparición y limita a 12 los enemigos activos simultáneos. El récord local conserva máximos de oleada y puntuación.
+- Ajustes persistentes para volúmenes independientes, música, calidad gráfica, sensibilidad de apuntado y controles táctiles; renderer y audio aplican sus preferencias.
+- Los logros escuchan eventos del juego y guardan contadores/desbloqueos localmente.
+- En pantallas táctiles se muestra un stick virtual de movimiento, una zona derecha de apuntado/disparo y botones de habilidades. El teclado y ratón siguen disponibles.
+- Game Over y victoria notifican resultados, limpian la instancia de `Game` y permiten reiniciar el capítulo seleccionado sin perder ajustes, progreso de campaña, récords ni logros.
+
+### Elementos provisionales y límites
+
+- Música y efectos son síntesis Web Audio temporales, no pistas ni grabaciones finales; el audio se desbloquea con interacción del usuario.
+- Música y efectos siguen siendo síntesis Web Audio temporales. Los nombres/IDs de audio de los bosses son placeholders procedurales, no grabaciones finales.
+- El escalado infinito modifica cantidades, intervalos y radios, no las estadísticas individuales de enemigos. La puntuación provisional suma 100 por baja y 250 × oleada completada.
+- El fondo del menú es arte procedimental Canvas 2D; no se añadieron ilustraciones ni archivos de audio finales.
+- La validación táctil se hizo en emulación de navegador a 390 × 844; falta comprobar gestos, safe areas y ergonomía en teléfonos físicos.
+- La calidad gráfica actual controla sombras y límite de pixel ratio; no ofrece perfiles detallados por plataforma.
+
+### Verificación de esta ampliación
+
+- `npm run build`: correcto; Vite conserva la advertencia del bundle minificado superior a 500 kB.
+- Los checks actuales del producto están registrados al final de este roadmap; AV1–AV4 y GC1 conservan sus estados de validación previos.
+- Navegación real: ajustes, persistencia de volumen, seis logros, selección/desbloqueo de capítulos y ausencia de Game/canvas WebGL antes de iniciar.
+- Navegación real: modo infinito muestra `1 / ∞`; canvas Three.js no vacío en captura desktop y móvil; controles táctiles visibles y movimiento del stick comprobado; reinicio devuelve salud completa.
+- La pestaña integrada puede pausar `requestAnimationFrame` cuando pierde foco. La transición Game Over y el render no vacío también se comprobaron con ticks controlados para evitar depender de esa limitación.
+
+---
+
+## Campaña — tres capítulos y jefes
+
+**Asignación:** implementación completa solicitada por el usuario; no modifica Dash, costes de energía, tablas/probabilidades de loot ni los estados de validación AV1–AV4/GC1.
+
+**Estado:** implementada y cubierta por checks deterministas y recorrido integrado de `Game`; pendiente de balance y validación visual/auditiva manual del usuario en una sesión normal y hardware objetivo.
+
+### Contenido entregado
+
+- `Pueblo Fantasma`: pueblo western existente, dos waves y El Sheriff de Hierro. Alterna revólver apuntado, ráfagas, lariat, abanico y carga.
+- `Cañón de Cristal`: mesas/cristales y colisiones propias, dos waves y La Matriarca del Abismo. Usa proyectil apuntado, abanico, invocación limitada, radial y zona de colapso.
+- `La Fundición Roja`: edificios/tanques industriales y colisiones propias, dos waves y El Predicador Carmesí. Usa proyectil, láser, invocación, radial y secuencia de patrones.
+- Cada jefe tiene tres fases configurables por thresholds, modificadores de velocidad y listas de ataques; se procesan todos los thresholds cruzados por el mismo impacto. Windup/active/recovery/cooldown controlan anticipación, aplicación de daño y reutilización. RNG y objetivos son inyectables.
+- Arenas visuales pulsantes con marcadores por jefe; HUD de salud/fase, introducciones, eventos de audio procedural y animación de derrota.
+- `CampaignManager` coordina intro, waves, boss intro/fight, capítulo completo, siguiente capítulo, victoria y game-over. El menú desbloquea capítulos secuencialmente; reiniciar crea una run limpia.
+- World y WaveManager se reconstruyen entre capítulos manteniendo referencias de obstáculos. RunState, vida/energía restantes, wallet, upgrades, perks, bajas y puntuación permanecen; las recompensas de jefe se aplican una sola vez. Los enemigos invocados se limpian al cambiar de capítulo.
+
+### Verificación
+
+- Build final: `npm run build` correcto. Sigue la advertencia conocida de Vite: chunk de `Game` de ~728 kB sin gzip (~188 kB gzip).
+- Checks deterministas: 23 Boss (fases múltiples, referencias de ataques, patrones, tiempos de burst, cooldown, cancelación, daño, LoS, recompensas, modelo/arena, muerte/cleanup y navegación contra pared), 8 CampaignManager, 22 integración de campaña completa, 9 World/escenarios.
+- Regresiones ejecutadas en navegador: 116 estadísticas, 34 HUD, 29 habilidades, 32 combate, 62 enemigos, 43 loot, 12 muerte, 25 waves, 37 progresión, 1 integración de progresión, 11 rendimiento, 5 F3, 12 VFX y 5 audio. La prueba integrada fuerza el combate para recorrer los tres capítulos; no mide duración ni dificultad humana.
+- Playwright comprobó menú con tres capítulos (solo el primero inicialmente desbloqueado), creación del canvas WebGL, introducción del capítulo 1, estado `PREPARANDO`, HUD de vida/fase del Sheriff y arena en escena. Se revisó composición desktop y móvil; el selector y el overlay caben sin solape. El recorrido completo automatizado alcanza victoria y comprueba compra/persistencia/cambio de bioma.
+- No se declara una duración estimada de campaña ni balance final. Falta que el usuario valide el ritmo, lectura de telegráfos, dificultad, mezcla y presentación de los tres bosses en una partida normal.
+
+---
+
+## Iteración audiovisual independiente — AV1 a AV4
+
+**Asignación:** iteración solicitada de identidad audiovisual; no es una fase jugable nueva y no modifica los estados de 4E/4F.
+
+**Estado:** AV1–AV4 implementadas, con corrección urgente de efectos y navegación; siguen pendientes de validación visual y auditiva del usuario.
+
+### AV1 — Identidad visual y escenario
+
+- `src/config/visualTheme.ts` centraliza paleta, luz de atardecer, parámetros de cristales/polvo y perfiles gráficos.
+- El escenario conserva `World` y sus edificios, pero incorpora varias geometrías/materiales compartidos para rocas, carteles cian/magenta/azules con luz local, cristales cian/violeta pulsantes y una nube `THREE.Points` de polvo con un único draw call.
+- Los perfiles limitan pixel ratio, sombras, luces locales, polvo y partículas. El polvo son puntos aditivos de 3.2 px a 0.9–5.4 unidades sobre el suelo; baja mantiene 20, media 56 y alta 150.
+- Se conserva el modelo artesanal de `PlayerVisual`, la composición de enemigos y el CSS existente; sus materiales principales ahora toman colores de la paleta.
+
+### AV2 — Efectos de combate
+
+- `src/vfx/VisualEffectsSystem.ts` escucha eventos con posiciones reales y administra un batch acotado de partículas, billboard radial de flash y feedback de daño. El flash del jugador se adelanta 0.62 unidades al muzzle, mide 2.4 unidades mundiales y dura 360 ms; la prueba F3 dura 2 s.
+- Se visualizan chispas de impacto, plasma, daño/bajas enemigas, daño del jugador, loot, pasos y Dash. El evento `projectile-spawned` da flash a disparos enemigos. Los proyectiles tienen núcleos visuales separados de su radio de colisión y estelas cónicas aditivas de 1.3–1.65 unidades que se eliminan al expirar o impactar.
+- El sistema visual no participa en `DamageResolver`, detección de segmentos ni colliders. Presupuestos máximos: 48/144/288 partículas en baja/media/alta.
+- Geometrías/materiales, listeners, overlays y líneas se liberan al destruir su propietario.
+- Diagnóstico de la baja visibilidad anterior: el tamaño de puntos se trataba como perspectiva aunque la cámara es ortográfica; el polvo ambiental medía 0.11, su opacidad era 0.22 y podía quedar detrás del terreno; el flash duraba 55 ms y se reescalaba a 1.2–2.2 en cada update, anulando el pico; las estelas eran segmentos lineales de 1 px. El billboard radial ortográfico y el cono aditivo corrigen esas causas.
+
+### AV3 — Música y efectos sonoros
+
+- `src/audio/ProceduralMusicEngine.ts` genera loops originales con ruido ambiental filtrado, pads, bajo y percusión sintetizada; dos buses permiten crossfade de 1.4 s entre menú, exploración, combate, intermisión y Game Over.
+- `AudioManager` sintetiza disparo, plasma, impactos, Dash, daño/muerte, ataques/muerte de enemigos, pickups, mejoras, perks, logros, oleadas y menú. Respeta gains independientes, desbloqueo por interacción, cooldowns y un máximo de 18 voces SFX activas.
+- Enemigos y perks pueden proporcionar IDs sonoros propios. No hay grabaciones ni archivos de música finales; timbres, ruido y mezcla siguen siendo una implementación procedural provisional.
+
+### AV4 — Interfaz, móviles y rendimiento
+
+- Los tokens CSS alinean menú, HUD, ajustes, logros, intermisión y resultados sin reemplazar sus layouts personalizados; se añadieron transiciones discretas.
+- Safe areas se conservan; el HUD se compacta arriba en móvil y landscape, los controles se reducen en pantallas bajas y se sugiere rotación en portrait.
+- `ApplicationController` carga `Game` con `import()` al iniciar una partida: el build divide el entry inicial (~34 kB sin gzip) del chunk `Game` (~648 kB sin gzip). No se añadieron dependencias.
+
+### Corrección de obstáculos y navegación
+
+- La causa del atasco era navegación local greedy: solo aceptaba desvíos que redujeran distancia en cada paso, por lo que un obstáculo que exigía alejarse impedía rodearlo. Además, `Enemy.update()` no comprobaba LoS antes de llamar al controlador de ataques.
+- Se generan 140 piedras decorativas; 15 superaban el umbral anterior de collider. En el área central se localizaron `Rock:16` (-13.88, -18.97), `Rock:61` (-14.91, 16.60) y la problemática `Rock:90` (-9.30, 10.87). Ahora solo rocas de tamaño >=0.7 son sólidas y su caja horizontal usa el 82% de la envolvente renderizada; F3 colorea rocas rojo, bases de cristal violeta y otras estructuras ámbar.
+- `EnemyNavigation.ts` ejecuta A* en una ventana local acotada, infla obstáculos por radio, suaviza segmentos sin atravesarlos y replanifica cada 0.55 s o tras 0.28 s sin progreso. Enemigos melee y ranged seleccionan puntos de ataque con LoS; ranged no dispara a través de obstáculos. Las peticiones de spawn dentro de un collider buscan una alternativa libre.
+- F3 expone colliders, rutas/waypoints, LoS, origen de efectos y trayectorias activas; incluye un botón para generar flash y polvo en una posición visible.
+
+### Verificación
+
+- `npm run build` pasa con carga diferida; Vite aún avisa que el chunk de `Game` supera 500 kB, aunque ya no bloquea la pantalla inicial.
+- Checks visuales y de navegación añadidos: 8 VFX, 5 F3, 98 casos lógicos de navegación y más de 5,000 comprobaciones por frame de no penetración (incluidos `Rock:90`, spawn dentro de roca, movimiento melee y LoS/proyectil ranged). Las suites existentes de colisión/proyectiles pasan; el radio usado en colisión no cambia cuando aumenta el mesh visual.
+- La emulación del navegador comprueba portrait y landscape, safe areas, controles, HUD sin solapes, render WebGL y la carga de `Game` tras iniciar.
+- Playwright capturó colliders codificados por color, polvo, el botón F3 flash/polvo y el billboard del fogonazo. Un check de `Game` usa handlers reales de `PointerEvent`, WASD y Shift con ticks controlados: dos disparos, 8 nubes de movimiento y una activación de Dash. Se comprobó el framebuffer en la posición proyectada (558,342): intensidad máxima 255; la captura muestra el halo junto al arma.
+- AV1–AV4 no están validadas por el usuario. Hace falta escuchar la mezcla en altavoces/auriculares y revisar VSM, proyectiles y efectos en hardware real.
+
+---
+
+## GC1 — Gameplay y combate dinámico
+
+**Estado:** implementada y con checks técnicos; pendiente de validación visual del usuario. No añade armas, enemigos, mapas, granadas ni sistemas de progresión. Los estados de AV1–AV4 siguen pendientes; 4E/4F no cambian.
+
+### GC1.1–GC1.2 — Feedback y fases de ataque
+
+- Los números flotantes reutilizan un pool de 12 sprites/texturas, con límites 4/8/12 por calidad, ascenso/fade y daño efectivo (capado por salud restante). El jugador recibe flash y, cuando existe posición fuente, un indicador direccional proyectado por cámara.
+- Cada ataque configurable sigue `windup → active → recovery → cooldown`. El crawler usa 0,34/0,12/0,42 s; el forajido plasma 0,55/0,28/0,45 s con ráfaga de 3 disparos cada 0,1 s. Melee solo aplica daño al entrar en `active`; ráfagas y cooldown respetan la configuración y LoS.
+- Los modelos enemigos tienen aro/material de anticipación, flash de impacto y recoil en su grupo visual hijo; no desplazan el root ni cambian el collider.
+
+### GC1.3–GC1.5 — Movimiento, muerte y balance
+
+- Separación local evita solapes persistentes; los enemigos ranged orbitan a baja velocidad al mantener distancia. A* existente replanifica alrededor de obstáculos y el ataque se bloquea mientras LoS esté cerrado.
+- Al morir, el manager quita inmediatamente el enemigo de `alive` y `CombatSystem`, emite una sola baja/loot y conserva solo la vista 0,38 s; su collider no se anima. Geometrías/materiales se liberan al finalizar.
+- `src/config/enemyBalance.config.ts` centraliza salud, daño, velocidad, rango, separación y duraciones. La ráfaga de plasma reparte 9 de daño total; no se modificaron Dash ni sus costes.
+
+### GC1.6–GC1.7 — Rendimiento y verificación
+
+- Feedback reutiliza pools acotados, sprites/texturas reciclados y límites por perfil gráfico. F3 conserva sus funciones e incluye capas de colisión, ruta, LoS y proyectiles.
+- `npm run build` pasa con TypeScript estricto. Regresiones finales: 32 combate, 62 enemigos, 98 casos lógicos + 5.872 comprobaciones por frame de navegación/colisión, 12 VFX y 5 de renderer F3; además todas las suites previas de habilidades, loot, stats, waves, progresión, audio y rendimiento.
+- Playwright comprobó visualmente el aro de windup en escena y ejecutó un `Game` controlado por `PointerEvent`, WASD y Shift: un golpe melee activo, muerte/limpieza, dos disparos y Dash. AV1–AV4 y GC1 siguen pendientes de validación visual del usuario en una sesión normal y hardware objetivo.
+
+---
+
+## Catálogo experimental de enemigos elementales
+
+**Asignación:** batería de prototipos solicitada; los enemigos son contenido de prueba y no forman parte del juego normal.
+
+**Estado:** comportamientos y configuración implementados; 73 checks deterministas pasan; los 12 perfiles siguen pendientes de observación visual y balance. **Activados en partidas normales: ninguno.**
+
+### Auditoría elemental
+
+- Antes de esta sección, el juego solo declaraba `physical` y `plasma`. El color emisivo de un proyectil no determinaba su daño; no había resistencias, vulnerabilidades ni estados temporales.
+- Se añadieron `fire`, `electric` y `cryo`, conservando `physical` como valor base. `DamageResolver` aplica multiplicadores elementales opcionales y estados declarados por el ataque. Las definiciones existentes no reciben elementos, estados ni cambios de daño.
+- Estados y límites: burn renueva un único efecto con el DPS más alto, intervalo de 0,2–1 s, máximo 18 DPS y 8 s; slow renueva sin acumular, nunca baja de 45% de velocidad y dura como máximo 8 s; shock renueva con un máximo de 0,35 s. La descarga eléctrica no inmoviliza indefinidamente.
+- Splash y chain son propiedades opcionales de `ProjectileDefinition.onImpact`, independientes de `damageType`. El electric chain limita objetivos totales (incluido el impacto inicial), registra los ya alcanzados y respeta LoS. Daño, impacto, aplicación de estado y VFX permanecen en eventos/sistemas separados.
+- El artillero usa un proyectil parabólico visible y un punto bloqueado durante windup; el hazard resuelve el daño en ese punto al finalizar el aviso. Los hazards tienen intervalos de daño fijos, caps globales y por propietario, colisión/LoS y limpieza al morir, salvo detonaciones ya confirmadas con una zona finita persistente.
+
+### Catálogo
+
+| Nombre | Rol | Elemento | Ataques | Debilidad jugable | Cómo probarlo | Estado de validación |
+|---|---|---|---|---|---|---|
+| Forajido de chatarra | Tirador móvil | Físico | Abanico de 3 disparos, strafing y recarga | Electricidad, criogénico | `experimental-scrap-raider` | Checks automáticos; visual/balance pendientes |
+| Embestidor blindado | Cargador acorazado | Físico | Línea telegráfica, carga bloqueable y recuperación | Criogénico, plasma; resistencia frontal finita | `experimental-armored-ram` | Checks automáticos; visual/balance pendientes |
+| Artillero del páramo | Artillería | Físico | Proyectil parabólico y área retrasada en punto fijo | Electricidad, criogénico | `experimental-wasteland-gunner` | Checks automáticos; visual/balance pendientes |
+| Incendiario de la fundición | Presión cercana | Fuego | Cono con windup, velocidad de giro acotada y burn | Criogénico, electricidad | `experimental-foundry-incendiary` | Checks automáticos; visual/balance pendientes |
+| Escarabajo de escoria | Corredor suicida | Fuego | Fuse visible, explosión y zona temporal; muere antes de detonar | Criogénico, plasma | `experimental-scoria-beetle` | Checks automáticos; visual/balance pendientes |
+| Chamán de ceniza | Control de espacio | Fuego | Tres zonas fijadas con retraso y cadencia limitada | Criogénico, físico | `experimental-ash-shaman` | Checks automáticos; visual/balance pendientes |
+| Centinela de tormenta | Tirador de línea | Electricidad | Descarga lineal bloqueada por obstáculos | Físico, plasma | `experimental-storm-sentinel` | Checks automáticos; visual/balance pendientes |
+| Tejedor de arcos | Constructor de hazards | Electricidad | Nodos destruibles, arco con LoS y needle con chain opcional | Físico, criogénico | `experimental-arc-weaver` | Checks automáticos; visual/balance pendientes |
+| Sabueso voltaico | Asaltante veloz | Electricidad | Salto corto anticipado y descarga de aterrizaje | Criogénico, físico | `experimental-volt-hound` | Checks automáticos; visual/balance pendientes |
+| Tirador de escarcha | Hostigador móvil | Criogénico | Abanico lento con huecos y slow limitado | Fuego, plasma | `experimental-frost-sharpshooter` | Checks automáticos; visual/balance pendientes |
+| Excavador de cristal | Emboscador subterráneo | Criogénico | Recorrido bloqueable, marcador de salida y onda retrasada | Fuego, electricidad | `experimental-crystal-excavator` | Checks automáticos; visual/balance pendientes |
+| Custodio de plasma | Élite lento | Plasma | Orbe explosivo y salva radial con huecos | Criogénico, electricidad | `experimental-plasma-custodian` | Checks automáticos; visual/balance pendientes |
+
+### Arquitectura y activación
+
+- `EXPERIMENTAL_ENEMY_DEFINITIONS` vive en `src/config/experimentalEnemies.config.ts`; no se concatena con `ENEMY_DEFINITIONS`, `WAVE_DEFINITIONS`, capítulos ni invocaciones de bosses.
+- Cada perfil usa `EnemyManager`, `CombatSystem`, `DamageResolver` y `EnemyNavigation`; `ExperimentalAttackController` selecciona ataques desde datos y delega hazards limitados a `EnemyHazardManager`. `EnemyVisual` acepta piezas geométricas y telegráfos de línea, abanico, marcadores, anillo y subterráneo.
+- La factoría `src/enemies/ExperimentalEnemyFactory.ts` exige contexto explícito `role + getTargets`; acepta `local`/`host`, rechaza `guest`, y crea un único enemigo por `create(id, position)`. No hay selector de desarrollo ni spawn automático.
+- Límites de prueba: 12 prototipos vivos por factoría, 16 hazards globales, hazards/nodos limitados por perfil y 256 proyectiles activos globales. Fan, radial y burst validan también sus cantidades máximas.
+- Ejemplo para un harness futuro:
+
+```ts
+const factory = new ExperimentalEnemyFactory(scene, world.obstacles, combat, {
+  role: 'local',
+  getTargets: () => [player],
+  random: seededRandom,
+})
+const enemy = factory.create('experimental-scrap-raider', new THREE.Vector3(8, 0, 0))
+factory.update(deltaTime)
+factory.dispose()
+```
+
+- El repositorio contiene trabajo previo de transporte/rooms WebSocket, pero todavía no una simulación cooperativa autoritativa jugable. Esta tarea no añade integración de red; la factoría requiere autoridad y una lista de objetivos para preparar ese límite sin simular en invitados.
+
+### Verificación y pendientes
+
+- `npm run build`: correcto; Vite conserva su aviso existente de chunk `Game` superior a 500 kB.
+- 73 checks deterministas ejecutados en navegador: catálogo/IDs, exclusión activa, resistencias/debilidades, stacking y caducidad de estados, stagger, cadencia de áreas, límite de hazards, LoS y nodos destruibles, splash/chain sin repeticiones, factoría solo por ID, autoridad, armadura frontal, fan de tres disparos, cancelación por cambio/desconexión/rango, fuse interrumpible/detonado, proyectil parabólico con punto bloqueado y ausencia de buffers de telegráfo en enemigos activos.
+- No se añadió ningún ID a los conjuntos activos de enemigos, oleadas, campaña o summons de bosses. Dash, coste de energía, loot, balance de enemigos existentes y sus daños elementales permanecen sin cambios.
+- La validación visual y de balance de los 12 enemigos queda pendiente. No se declaran observados ni activados en juego normal.
+
+---
+
+## Expansión de sistemas — dificultad, habilidades y capítulos 4–6
+
+**Asignación:** ampliación directa solicitada por el usuario. No altera los estados históricos AV1–AV4, GC1 ni la exclusión del catálogo experimental; no incluye despliegue, commit o push.
+
+**Estado:** implementación y checks técnicos completados; balance y validación visual/auditiva humana siguen pendientes.
+
+### Dificultad
+
+- `difficulty.config.ts` define Explorer, Normal, Veteran, Nightmare y Custom con rangos acotados, reacción mínima y límites de spawn/hazards. Normal es neutro.
+- Ajustes persiste perfil y sliders custom con sanitización/migración para datos antiguos. El menú resume la selección antes de iniciar; los cambios durante una run se aplican al siguiente encuentro, no a una pelea ya iniciada.
+- Escala por instancia de waves, enemigos, boss, cooldowns, telegráfos, proyectiles y recuperación de vida/energía. No muta definiciones base ni altera probabilidades de loot.
+
+### Habilidades
+
+- Catálogo de 12 entradas; 4 implementadas (Arco voltaico, Pulso de escarcha, Escudo de emergencia y Reserva auxiliar) y 8 explícitamente futuras.
+- Progreso versionado en almacenamiento local; migración basada en capítulos efectivamente completados, desbloqueo único y loadout de 2 activas + 2 pasivas. No equipa contenido futuro/no implementado; Dash original permanece.
+- Las cuatro funcionales comparten los sistemas de combate/estado existentes; el pasivo aplica un modificador reversible de la run.
+
+### Campaña extendida
+
+- La campaña original de tres capítulos se amplía secuencialmente a seis: Pantano de Esporas, Observatorio de Tormentas y Núcleo del Eclipse añaden tres waves cada uno y mapas diferenciados con landmarks/paleta propios.
+- Nuevos bosses: Matriarca del Fango, Alguacil de la Tormenta y Fundidor del Eclipse; cada uno define tres fases, ataques y recompensas. El Alguacil usa enlaces eléctricos telegráfiados con nodos destruibles, límites de hazard y limpieza al cambiar de fase/morir.
+- Los enemigos experimentales siguen fuera de waves/campaña/summons normales.
+
+### Verificación y límites
+
+- Checks deterministas ejecutados: 33 de dificultad/progresión e integración de habilidades; 13 de mapas; 28 de bosses; 9 de CampaignManager; 43 del recorrido integrado que fuerza los seis capítulos y confirma landmarks. La configuración contiene 15 waves reales; el harness acorta cada capítulo a una wave.
+- Regresiones ejecutadas: 118 stats, 34 HUD, 12 muerte, 29 habilidades base, 32 combate, 62 enemigos, 5.872 navegación, 73 experimentales, 43 loot, 25 waves, 37 progresión, 1 integración de progresión, 1 ciclo de Game, 11 rendimiento, 5 F3, 8 touch, 12 VFX, 9 AppFeatures y 5 audio.
+- `npm run build`: correcto. Vite conserva el aviso del chunk `Game` por encima de 500 kB.
+- Vistas revisadas en navegador: Settings desktop 1280×720; catálogo 390×844 y 844×390; selector de capítulo en landscape. No hubo overflow horizontal. Sin dispositivo físico no se atribuye validación táctil de hardware.
+- El balance humano, lectura visual/auditiva y progresión de las seis etapas siguen pendientes; la verificación automática de la secuencia no equivale a una partida equilibrada.
 
 ---
 
@@ -299,4 +550,4 @@ Al finalizar **cada** fase, entregar:
 
 ## 4. Próxima acción
 
-**Esperar validación visual del usuario de la Fase 4D.** No iniciar 4E hasta su aprobación. La pantalla Game Over, animación de muerte, menú de reinicio y reaparición siguen pendientes sin asignación de fase.
+**Próxima acción:** cerrar checks de dificultad/habilidades y recorrer los seis capítulos extendidos; revisar sus vistas desktop/móvil y registrar explícitamente lo que solo requiere validación humana. Después, volver a la validación visual del catálogo experimental, que permanece desactivado. 4E/4F, AV1–AV4 y GC1 conservan sus estados anteriores; la validación móvil física y la animación de muerte/reaparición siguen pendientes.

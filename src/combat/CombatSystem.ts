@@ -4,6 +4,7 @@ import type { AttackDefinition, CombatSource, DamageContext, ProjectileDefinitio
 import type { Damageable } from './Damageable'
 import { ProjectileSystem } from './ProjectileSystem'
 import { DamageResolver } from './DamageResolver'
+import type { GameEventBus } from '../events/GameEventBus'
 
 export class CombatSystem {
   private readonly attack: AttackController
@@ -13,6 +14,7 @@ export class CombatSystem {
   private disposed = false
   private readonly obstacles: readonly THREE.Box2[]
   private readonly canAttack: () => boolean
+  private readonly events?: GameEventBus
 
   constructor(
     parent: THREE.Object3D,
@@ -20,19 +22,37 @@ export class CombatSystem {
     attack: AttackDefinition,
     source: CombatSource,
     canAttack: () => boolean = () => true,
+    events?: GameEventBus,
   ) {
     this.obstacles = obstacles
     this.canAttack = canAttack
+    this.events = events
     this.attack = new AttackController(attack, source)
-    this.projectiles = new ProjectileSystem(parent)
+    this.projectiles = new ProjectileSystem(parent, events)
   }
 
   get shotsFired(): number {
     return this.attack.shotsFired
   }
 
+  get effectiveAttackStats(): ReturnType<AttackController['getEffectiveStats']> {
+    return this.attack.getEffectiveStats()
+  }
+
+  addAttackModifier(modifier: Parameters<AttackController['addModifier']>[0]): void {
+    this.attack.addModifier(modifier)
+  }
+
+  removeAttackModifier(id: string): boolean {
+    return this.attack.removeModifier(id)
+  }
+
   get projectileCount(): number {
     return this.projectiles.activeCount
+  }
+
+  getDebugProjectilePaths(): ReturnType<ProjectileSystem['getDebugPaths']> {
+    return this.projectiles.getDebugPaths()
   }
 
   registerTarget(target: Damageable): void {
@@ -50,9 +70,18 @@ export class CombatSystem {
     this.projectiles.spawn(definition, source, position, direction)
   }
 
+  spawnArcVisual(definition: ProjectileDefinition, source: CombatSource, start: THREE.Vector3, target: THREE.Vector3, durationSeconds: number, apexHeight: number): void {
+    if (this.disposed || source.id === this.attack.source.id && !this.canAttack()) return
+    this.projectiles.spawnArcVisual(definition, source, start, target, durationSeconds, apexHeight)
+  }
+
   applyDamage(target: Damageable, context: DamageContext): boolean {
     if (this.disposed) return false
-    return this.damageResolver.apply(target, context)
+    const applied = this.damageResolver.apply(target, context)
+    if (applied && target.faction === 'player' && context.sourcePosition) {
+      this.events?.emit({ type: 'player-hit-source', position: context.sourcePosition })
+    }
+    return applied
   }
 
   update(deltaTime: number, firing: boolean, muzzle: THREE.Vector3, aimPoint: THREE.Vector3, advanceProjectiles = true): void {
@@ -66,7 +95,7 @@ export class CombatSystem {
     let previousOffset = 0
     for (const shot of shots) {
       this.projectiles.update(shot.offsetSeconds - previousOffset, this.obstacles, targets)
-      this.projectiles.spawn(this.attack.definition, this.attack.source, shot.position, shot.direction)
+      this.projectiles.spawn(shot.definition, this.attack.source, shot.position, shot.direction)
       previousOffset = shot.offsetSeconds
     }
     this.projectiles.update(elapsed - previousOffset, this.obstacles, targets)

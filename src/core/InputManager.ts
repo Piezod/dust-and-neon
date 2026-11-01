@@ -3,6 +3,8 @@ export class InputManager {
   private readonly keys = new Set<string>()
   private readonly justPressed = new Set<string>()
   private readonly movementKeys = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD'])
+  private virtualHorizontal = 0
+  private virtualVertical = 0
 
   constructor(keyboardTarget: EventTarget = window) {
     this.keyboardTarget = keyboardTarget
@@ -19,6 +21,19 @@ export class InputManager {
   consumePressed(code: string): boolean {
     const pressed = this.justPressed.delete(code)
     return pressed
+  }
+
+  get movementHorizontal(): number {
+    return Math.max(-1, Math.min(1, Number(this.isPressed('KeyD')) - Number(this.isPressed('KeyA')) + this.virtualHorizontal))
+  }
+
+  get movementVertical(): number {
+    return Math.max(-1, Math.min(1, Number(this.isPressed('KeyW')) - Number(this.isPressed('KeyS')) + this.virtualVertical))
+  }
+
+  setVirtualMovement(horizontal: number, vertical: number): void {
+    this.virtualHorizontal = Number.isFinite(horizontal) ? Math.max(-1, Math.min(1, horizontal)) : 0
+    this.virtualVertical = Number.isFinite(vertical) ? Math.max(-1, Math.min(1, vertical)) : 0
   }
 
   reset(): void {
@@ -41,6 +56,8 @@ export class InputManager {
   private readonly clear = (): void => {
     this.keys.clear()
     this.justPressed.clear()
+    this.virtualHorizontal = 0
+    this.virtualVertical = 0
   }
 
   dispose(): void {

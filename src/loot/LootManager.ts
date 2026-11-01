@@ -8,6 +8,7 @@ import { LootRewardResolver } from './LootRewardResolver'
 import { LootRoller } from './LootRoller'
 import { LootTable } from './LootTable'
 import type { Wallet } from './Wallet'
+import type { GameEventBus } from '../events/GameEventBus'
 
 const PICKUP_RADIUS = 0.38
 const PICKUP_CLEARANCE = 0.12
@@ -21,9 +22,11 @@ export class LootManager {
   private readonly unsubscribeDeath: () => void
   private nextPickupId = 0
   private disposed = false
+  private resourceRecoveryMultiplier = 1
   private readonly parent: THREE.Object3D
   private readonly obstacles: readonly THREE.Box2[]
   private readonly player: Player
+  private readonly events?: GameEventBus
 
   constructor(
     parent: THREE.Object3D,
@@ -33,6 +36,7 @@ export class LootManager {
     wallet: Wallet,
     tableDefinitions: readonly LootTableDefinition[],
     randomSource: RandomSource = Math.random,
+    events?: GameEventBus,
   ) {
     this.parent = parent
     this.obstacles = obstacles
@@ -43,6 +47,7 @@ export class LootManager {
     this.resolver = new LootRewardResolver(player.stats, wallet, () => player.stats.currentHealth > 0)
     this.unsubscribeDeath = enemies.onDeath((event) => this.onEnemyDeath(event))
     this.player = player
+    this.events = events
   }
 
   get activeCount(): number {
@@ -53,6 +58,10 @@ export class LootManager {
     return Array.from(this.pickups.values())
   }
 
+  setResourceRecoveryMultiplier(value: number): void {
+    this.resourceRecoveryMultiplier = Number.isFinite(value) ? THREE.MathUtils.clamp(value, 0.75, 1.3) : 1
+  }
+
   update(deltaTime: number): void {
     if (this.disposed) return
     const playerPosition = this.player.position
@@ -61,6 +70,12 @@ export class LootManager {
       pickup.update(deltaTime)
       if (!pickup.tryCollect(playerPosition, this.player.radius, alive, this.resolver)) continue
       this.pickups.delete(pickup.id)
+      this.events?.emit({
+        type: 'loot-collected',
+        reward: { type: pickup.type, quantity: pickup.quantity },
+        position: [pickup.position.x, pickup.position.y, pickup.position.z],
+        soundId: `loot.${pickup.type}`,
+      })
       pickup.dispose()
     }
   }
@@ -90,7 +105,11 @@ export class LootManager {
       const angle = index * GOLDEN_ANGLE
       const radius = 0.8 + Math.floor(index / 8) * 0.35
       const requested = origin.clone().add(new THREE.Vector3(Math.cos(angle) * radius, 0, Math.sin(angle) * radius))
-      this.createPickup(result.rewards[index], requested, index)
+      const reward = result.rewards[index]
+      this.createPickup({
+        ...reward,
+        quantity: reward.type === 'gold' ? reward.quantity : Math.max(1, Math.round(reward.quantity * this.resourceRecoveryMultiplier)),
+      }, requested, index)
     }
   }
 

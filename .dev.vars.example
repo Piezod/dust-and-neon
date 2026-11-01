@@ -1,0 +1,3 @@
+# Copy to .dev.vars and add the LAN frontend origin when testing from another device.
+ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+ALLOW_LAN_ORIGINS=true

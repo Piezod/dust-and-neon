@@ -41,6 +41,7 @@ export interface AbilityState {
   readonly energySufficient: boolean
   readonly cooldownRemaining: number
   readonly energyCost: number
+  readonly detail?: string
 }
 
 export type AbilityFactory = () => Ability

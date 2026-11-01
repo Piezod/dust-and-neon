@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import type { LootRewardType } from './Loot.types'
+import { VISUAL_THEME } from '../config/visualTheme'
 
 export class LootVisual {
   readonly root = new THREE.Group()
@@ -34,8 +35,8 @@ export class LootVisual {
   }
 
   private createHealthVisual(): void {
-    const red = this.material('#ed514c', '#9d1c2b', 0.65)
-    const mark = this.material('#fff0d3', '#d2ab78', 0.25)
+    const red = this.material(VISUAL_THEME.colors.danger, '#9d1c2b', 0.65)
+    const mark = this.material('#fff0d3', VISUAL_THEME.colors.parchment, 0.25)
     this.mesh(new THREE.DodecahedronGeometry(0.35, 0), red, 0, 0.38, 0)
     this.box(0.1, 0.34, 0.06, mark, 0, 0.39, 0.3)
     this.box(0.28, 0.1, 0.06, mark, 0, 0.39, 0.3)
@@ -43,8 +44,8 @@ export class LootVisual {
   }
 
   private createEnergyVisual(): void {
-    const cyan = this.material('#54e8dc', '#0fb8ae', 1.4)
-    const highlight = this.material('#d5fff3', '#56dfd1', 0.8)
+    const cyan = this.material(VISUAL_THEME.colors.cyan, VISUAL_THEME.colors.cyanDeep, 1.4)
+    const highlight = this.material('#d5fff3', VISUAL_THEME.colors.cyan, 0.8)
     const crystal = this.mesh(new THREE.OctahedronGeometry(0.4, 0), cyan, 0, 0.48, 0)
     crystal.scale.set(0.76, 1.25, 0.76)
     this.mesh(new THREE.OctahedronGeometry(0.16, 0), highlight, 0, 0.49, 0.08)
@@ -52,8 +53,8 @@ export class LootVisual {
   }
 
   private createGoldVisual(): void {
-    const gold = this.material('#f6cb68', '#bd7821', 0.35, 0.72)
-    const edge = this.material('#fff0a8', '#dca23b', 0.4, 0.8)
+    const gold = this.material(VISUAL_THEME.colors.parchment, VISUAL_THEME.colors.sand, 0.35, 0.72)
+    const edge = this.material('#fff0a8', VISUAL_THEME.colors.glass, 0.4, 0.8)
     for (const offset of [-0.07, 0, 0.07]) {
       const coin = this.mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.08, 12), gold, offset, 0.31 + Math.abs(offset) * 0.5, 0)
       coin.rotation.z = offset * 2

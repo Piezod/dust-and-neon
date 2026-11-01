@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { InputManager } from './InputManager'
 import { Player } from '../entities/Player'
+import type { GameEventBus } from '../events/GameEventBus'
 
 export class PlayerController {
   private readonly input: InputManager
@@ -16,17 +17,22 @@ export class PlayerController {
   private readonly raycaster = new THREE.Raycaster()
   private readonly aimPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
   private readonly aimPoint = new THREE.Vector3()
+  private readonly stoppedDirection = new THREE.Vector3()
   private pointerActive = false
   private firing = false
+  private virtualFiring = false
   private gameplayEnabled = true
   private activePointerId: number | null = null
+  private aimSensitivity = 1
+  private readonly events?: GameEventBus
 
-  constructor(input: InputManager, camera: THREE.Camera, player: Player, canvas: HTMLCanvasElement, obstacles: readonly THREE.Box2[]) {
+  constructor(input: InputManager, camera: THREE.Camera, player: Player, canvas: HTMLCanvasElement, obstacles: readonly THREE.Box2[], events?: GameEventBus) {
     this.input = input
     this.camera = camera
     this.player = player
     this.canvas = canvas
     this.obstacles = obstacles
+    this.events = events
     this.aimPoint.copy(player.position).add(new THREE.Vector3(Math.sin(player.orientation), 0, Math.cos(player.orientation)))
     canvas.addEventListener('pointerdown', this.onPointerDown)
     canvas.addEventListener('pointermove', this.onPointerMove)
@@ -37,13 +43,14 @@ export class PlayerController {
   }
 
   updateMovement(deltaTime: number): void {
-    if (!this.gameplayEnabled || !this.player.stats.isAlive) {
+    if (!this.gameplayEnabled || !this.player.stats.isAlive || this.player.isStaggered) {
       this.input.reset()
       this.cancelAttackInput()
+      this.player.update(this.stoppedDirection, deltaTime, this.obstacles)
       return
     }
-    const horizontal = Number(this.input.isPressed('KeyD')) - Number(this.input.isPressed('KeyA'))
-    const vertical = Number(this.input.isPressed('KeyW')) - Number(this.input.isPressed('KeyS'))
+    const horizontal = this.input.movementHorizontal
+    const vertical = this.input.movementVertical
     this.camera.getWorldDirection(this.forward)
     this.forward.y = 0
     this.forward.normalize()
@@ -52,9 +59,10 @@ export class PlayerController {
     if (this.direction.lengthSq() > 0) this.direction.normalize()
     for (const binding of this.player.abilities.getInputBindings()) {
       if (this.input.consumePressed(binding.inputCode)) {
-        this.player.abilities.tryActivate(binding.id, {
+        const result = this.player.abilities.tryActivate(binding.id, {
           movementDirection: this.player.resolveMovementDirection(this.direction),
         })
+        if (result.activated) this.emitAbilityActivated(binding.id)
       }
     }
     this.player.update(this.direction, deltaTime, this.obstacles)
@@ -64,14 +72,49 @@ export class PlayerController {
     if (!this.gameplayEnabled || !this.player.stats.isAlive || !this.pointerActive) return
     const bounds = this.canvas.getBoundingClientRect()
     if (bounds.width === 0 || bounds.height === 0) return
-    this.cursor.set((this.pointer.x - bounds.left) / bounds.width * 2 - 1, 1 - (this.pointer.y - bounds.top) / bounds.height * 2)
+    this.cursor.set(((this.pointer.x - bounds.left) / bounds.width * 2 - 1) * this.aimSensitivity, (1 - (this.pointer.y - bounds.top) / bounds.height * 2) * this.aimSensitivity)
     this.camera.updateMatrixWorld()
     this.raycaster.setFromCamera(this.cursor, this.camera)
     if (this.raycaster.ray.intersectPlane(this.aimPlane, this.aimPoint)) this.player.facePoint(this.aimPoint)
   }
 
   get isFiring(): boolean {
-    return this.firing && this.gameplayEnabled && this.player.stats.isAlive
+    return (this.firing || this.virtualFiring) && this.gameplayEnabled && this.player.stats.isAlive && !this.player.isStaggered
+  }
+
+  setAimSensitivity(value: number): void {
+    this.aimSensitivity = Number.isFinite(value) ? Math.min(2, Math.max(0.25, value)) : 1
+  }
+
+  setVirtualMovement(horizontal: number, vertical: number): void {
+    this.input.setVirtualMovement(horizontal, vertical)
+  }
+
+  setTouchAim(clientX: number, clientY: number, firing: boolean): void {
+    this.pointer.set(clientX, clientY)
+    this.pointerActive = true
+    this.virtualFiring = firing
+  }
+
+  clearTouchAim(): void {
+    this.virtualFiring = false
+    this.pointerActive = false
+  }
+
+  activateAbility(id: string): void {
+    if (this.player.isStaggered) return
+    const result = this.player.abilities.tryActivate(id, {
+      movementDirection: this.player.resolveMovementDirection(this.direction),
+    })
+    if (result.activated) this.emitAbilityActivated(id)
+  }
+
+  private emitAbilityActivated(abilityId: string): void {
+    this.events?.emit({
+      type: 'dash-activated',
+      abilityId,
+      position: [this.player.position.x, this.player.position.y + 0.6, this.player.position.z],
+    })
   }
 
   setGameplayEnabled(enabled: boolean): void {
@@ -86,6 +129,7 @@ export class PlayerController {
 
   cancelAttackInput(): void {
     this.firing = false
+    this.virtualFiring = false
     if (this.activePointerId !== null && this.canvas.hasPointerCapture?.(this.activePointerId)) {
       try {
         this.canvas.releasePointerCapture(this.activePointerId)

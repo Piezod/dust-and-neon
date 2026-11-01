@@ -1,10 +1,10 @@
 .player-hud {
-  --hud-health: #e85c54;
-  --hud-energy: #4055cc;
-  --hud-ink: #fff3da;
+  --hud-health: var(--danger, #f05a62);
+  --hud-energy: var(--electric-blue, #408dff);
+  --hud-ink: var(--paper, #fff3da);
   --hud-muted: #c3c4b8;
   --hud-line: #ffffff24;
-  --hud-accent: #ffcc00;
+  --hud-accent: var(--parchment, #f1d09a);
   position: absolute;
   z-index: 2;
   left: 32px;
@@ -19,7 +19,7 @@
 .hud-telemetry {
   padding: 12px 14px;
   background: linear-gradient(110deg, #171d1bf2, #242522df);
-  border-left: 2px solid #d5bc8d;
+  border-left: 2px solid var(--parchment, #d5bc8d);
   box-shadow: 0 3px 14px #00000030;
 }
 
@@ -50,12 +50,18 @@
 .hud-attributes dd { margin: 3px 0 0; font-size: 14px; overflow-wrap: anywhere; }
 
 .hud-debug {
+  position: fixed;
+  z-index: 6;
+  top: max(12px, env(safe-area-inset-top));
+  left: max(16px, env(safe-area-inset-left));
   width: min(326px, calc(100vw - 64px));
-  max-height: max(100px, calc(100dvh - 310px));
-  margin-bottom: 12px;
+  max-height: calc(100dvh - 24px);
+  margin: 0;
   padding: 14px;
   overflow: auto;
   overscroll-behavior: contain;
+  font-size: 12px;
+  line-height: 1.4;
   background: #171d1bf5;
   border: 1px solid #bca57980;
   border-top: 2px solid var(--hud-energy);
@@ -83,17 +89,30 @@
 .hud-debug__loot { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 8px; }
 .hud-debug__toggles { display: grid; gap: 8px; margin: 12px 0; }
 .hud-debug__toggles label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.hud-debug__visuals { display: grid; gap: 7px; margin: 12px 0; padding: 9px; border: 1px solid var(--hud-line); }
+.hud-debug__visuals legend { padding: 0 5px; color: var(--hud-muted); font-size: 10px; }
+.hud-debug__visuals label { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 11px; }
+.hud-debug__legend { color: var(--hud-muted); font-size: 10px; }
+.hud-debug__visuals button { width: 100%; margin-top: 3px; border-color: var(--hud-accent); }
 .hud-debug input { width: 16px; height: 16px; margin: 0; accent-color: var(--hud-energy); }
 .hud-debug__refill { width: 100%; }
 
 @media (max-width: 600px) {
-  .player-hud { left: 20px; bottom: 52px; width: min(250px, calc(100% - 40px)); }
-  .hud-debug { position: fixed; top: 88px; left: 20px; width: min(326px, calc(100vw - 40px)); max-height: max(80px, calc(50dvh - 128px)); margin: 0; }
+  .player-hud { top: max(16px, env(safe-area-inset-top)); right: auto; bottom: auto; left: max(16px, env(safe-area-inset-left)); width: min(230px, calc(100% - 32px)); }
+  .hud-debug { top: max(16px, env(safe-area-inset-top)); left: max(16px, env(safe-area-inset-left)); width: min(326px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); }
 }
 
 @media (max-height: 500px) and (min-width: 601px) {
   .player-hud { left: 16px; bottom: 50px; width: min(240px, calc(100% - 32px)); }
-  .hud-debug { position: fixed; top: 12px; right: 16px; width: min(280px, calc(50vw - 48px)); max-height: calc(100dvh - 24px); margin: 0; }
+  .hud-debug { top: 12px; right: 16px; left: auto; width: min(280px, calc(50vw - 48px)); max-height: calc(100dvh - 24px); }
+}
+
+@media (orientation: landscape) and (max-height: 520px) and (max-width: 900px) {
+  .player-hud { top: max(8px, env(safe-area-inset-top)); right: auto; bottom: auto; left: max(12px, env(safe-area-inset-left)); width: min(216px, calc(100% - 24px)); }
+  .hud-telemetry { padding: 8px 10px; }
+  .hud-resource + .hud-resource { margin-top: 6px; }
+  .hud-abilities { margin-top: 7px; padding-top: 6px; }
+  .hud-attributes { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
