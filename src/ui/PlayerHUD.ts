@@ -84,7 +84,7 @@ export class PlayerHUD {
         ${this.debugTools ? `<fieldset class="hud-debug__visuals"><legend>VISTA DE ESCENA</legend>
           <label><input type="checkbox" data-debug-layer="world-colliders">Colliders del escenario</label>
           <small class="hud-debug__legend">Rojo: rocas · violeta: cristal · ambar: resto</small>
-          <label><input type="checkbox" data-debug-layer="enemy-colliders">Colliders de enemigos</label>
+          <label><input type="checkbox" data-debug-layer="enemy-colliders">Enemigos: fisico rojo / dano cian</label>
           <label><input type="checkbox" data-debug-layer="routes">Rutas y waypoints</label>
           <label><input type="checkbox" data-debug-layer="line-of-sight">Linea de vision</label>
           <label><input type="checkbox" data-debug-layer="effect-origins">Origenes de efectos</label>

@@ -4,6 +4,7 @@ import type { GameEvent, GameEventBus } from '../events/GameEventBus'
 import type { EnemyManager } from '../enemies/EnemyManager'
 import type { Player } from '../entities/Player'
 import type { World } from '../world/World'
+import type { Boss } from '../bosses/Boss'
 
 export type DebugLayerId = 'world-colliders' | 'enemy-colliders' | 'routes' | 'line-of-sight' | 'effect-origins' | 'projectile-trajectories'
 
@@ -32,13 +33,19 @@ export class GameDebugVisualization {
   private readonly enemies: EnemyManager
   private readonly player: Player
   private readonly combat: CombatSystem
+  private readonly world: World
+  private worldCollisionRevision: number
+  private readonly getBoss: () => Boss | null
 
-  constructor(scene: THREE.Scene, world: World, enemies: EnemyManager, player: Player, combat: CombatSystem, events: GameEventBus) {
+  constructor(scene: THREE.Scene, world: World, enemies: EnemyManager, player: Player, combat: CombatSystem, events: GameEventBus, getBoss: () => Boss | null = () => null) {
     this.enemies = enemies
     this.player = player
     this.combat = combat
+    this.world = world
+    this.worldCollisionRevision = world.collisionRevision
+    this.getBoss = getBoss
     this.worldLines = this.createLineLayer(scene, 'DebugWorldColliders', '#ffffff', true)
-    this.enemyLines = this.createLineLayer(scene, 'DebugEnemyColliders', '#ff5265')
+    this.enemyLines = this.createLineLayer(scene, 'DebugEnemyColliders', '#ffffff', true)
     this.routeLines = this.createLineLayer(scene, 'DebugEnemyRoutes', '#43e0c3')
     this.sightLines = this.createLineLayer(scene, 'DebugEnemyLineOfSight', '#ffffff', true)
     this.projectileLines = this.createLineLayer(scene, 'DebugProjectilePaths', '#dc4fae', true)
@@ -70,9 +77,16 @@ export class GameDebugVisualization {
   }
 
   update(): void {
+    if (this.worldCollisionRevision !== this.world.collisionRevision) {
+      const lines = this.createWorldColliderLines(this.world)
+      this.writeLines(this.worldLines, lines.positions, lines.colors)
+      this.worldCollisionRevision = this.world.collisionRevision
+    }
     const alive = this.enemies.getAlive()
-    if (this.enemyLines.object.visible) this.writeEnemyColliders(alive)
-    if (this.routeLines.object.visible) this.writeRoutes(alive)
+    const boss = this.getBoss()
+    const entities = boss ? [...alive, boss] : alive
+    if (this.enemyLines.object.visible) this.writeEnemyColliders(entities)
+    if (this.routeLines.object.visible) this.writeRoutes(entities)
     if (this.sightLines.object.visible) this.writeLineOfSight(alive)
     if (this.projectileLines.object.visible) this.writeProjectilePaths()
     if (this.origins.visible) this.writeOrigins()
@@ -118,7 +132,7 @@ export class GameDebugVisualization {
     const colors: number[] = []
     for (const record of world.obstacleDebugInfo) {
       const obstacle = record.bounds
-      const color = new THREE.Color(record.kind === 'rock' ? '#f05a62' : record.kind === 'crystal-base' ? '#a74ee8' : '#ffcc75')
+      const color = new THREE.Color('#ffcc75')
       const minX = obstacle.min.x
       const maxX = obstacle.max.x
       const minZ = obstacle.min.y
@@ -137,23 +151,37 @@ export class GameDebugVisualization {
     return { positions, colors }
   }
 
-  private writeEnemyColliders(enemies: readonly import('../enemies/Enemy').Enemy[]): void {
+  private writeEnemyColliders(enemies: readonly (import('../enemies/Enemy').Enemy | Boss)[]): void {
     const positions: number[] = []
+    const colors: number[] = []
     for (const enemy of enemies) {
-      const bounds = enemy.getCombatBounds()
-      for (let index = 0; index < 20; index++) {
-        const firstAngle = index * Math.PI * 2 / 20
-        const secondAngle = (index + 1) * Math.PI * 2 / 20
-        positions.push(
-          bounds.x + Math.cos(firstAngle) * bounds.radius, 0.035, bounds.z + Math.sin(firstAngle) * bounds.radius,
-          bounds.x + Math.cos(secondAngle) * bounds.radius, 0.035, bounds.z + Math.sin(secondAngle) * bounds.radius,
-        )
+      for (const [bounds, tint, height] of [
+        [enemy.getPhysicalBounds(), '#ff5265', 0.035],
+        [enemy.getCombatBounds(), '#43cfff', 0.09],
+      ] as const) {
+        const color = new THREE.Color(tint)
+        const radiusX = bounds.footprint?.radiusX ?? bounds.radius
+        const radiusZ = bounds.footprint?.radiusZ ?? bounds.radius
+        const rotation = bounds.footprint?.rotation ?? 0
+        const cosine = Math.cos(rotation)
+        const sine = Math.sin(rotation)
+        for (let index = 0; index < 32; index++) {
+          const firstAngle = index * Math.PI * 2 / 32
+          const secondAngle = (index + 1) * Math.PI * 2 / 32
+          positions.push(
+            bounds.x + Math.cos(firstAngle) * radiusX * cosine + Math.sin(firstAngle) * radiusZ * sine,
+            height, bounds.z - Math.cos(firstAngle) * radiusX * sine + Math.sin(firstAngle) * radiusZ * cosine,
+            bounds.x + Math.cos(secondAngle) * radiusX * cosine + Math.sin(secondAngle) * radiusZ * sine,
+            height, bounds.z - Math.cos(secondAngle) * radiusX * sine + Math.sin(secondAngle) * radiusZ * cosine,
+          )
+          colors.push(color.r, color.g, color.b, color.r, color.g, color.b)
+        }
       }
     }
-    this.writeLines(this.enemyLines, positions)
+    this.writeLines(this.enemyLines, positions, colors)
   }
 
-  private writeRoutes(enemies: readonly import('../enemies/Enemy').Enemy[]): void {
+  private writeRoutes(enemies: readonly (import('../enemies/Enemy').Enemy | Boss)[]): void {
     const positions: number[] = []
     for (const enemy of enemies) {
       const points = [enemy.root.position, ...enemy.navigationWaypoints]

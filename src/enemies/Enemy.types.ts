@@ -107,6 +107,7 @@ export interface EnemyDefinition {
   readonly maxHealth: number
   readonly moveSpeed: number
   readonly collisionRadius: number
+  readonly damageHitboxRadius?: number
   readonly detectionRange: number
   readonly behavior: EnemyBehaviorDefinition
   readonly attacks: readonly EnemyAttackDefinition[]

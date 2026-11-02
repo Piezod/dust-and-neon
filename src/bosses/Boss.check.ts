@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { BossManager } from './BossManager'
+import { Boss } from './Boss'
 import { CombatSystem } from '../combat/CombatSystem'
 import type { Damageable } from '../combat/Damageable'
 import { EnemyHazardManager } from '../enemies/EnemyHazardManager'
@@ -33,6 +34,35 @@ export function runBossChecks(): string {
   check(BOSS_DEFINITIONS.every((boss) => new Set(boss.attacks.map((attack) => attack.pattern)).size >= 4), 'Each boss uses multiple attack patterns')
   check(BOSS_DEFINITIONS.find((boss) => boss.id === 'storm-marshal')?.attacks.some((attack) => attack.pattern === 'arc-nodes' && attack.nodeHealth && attack.telegraph === 'nodes') === true,
     'Storm Marshal configures a telegraphed, destructible arc-link attack')
+
+  for (const definition of BOSS_DEFINITIONS) {
+    const hitScene = new THREE.Scene()
+    const hitCombat = new CombatSystem(hitScene, [], REVOLVER_ATTACK, PLAYER_COMBAT_SOURCE)
+    const hitHazards = new EnemyHazardManager(hitScene, [], hitCombat)
+    const hitPlayer: Damageable = { combatId: 'boss-hit-player', faction: 'player', getCombatBounds: () => ({ x: 15, z: 15, radius: 0.4 }), applyDamage: () => undefined }
+    const boss = new Boss({ definition, position: new THREE.Vector3(5, 0, 0), scene: hitScene, combat: hitCombat, player: hitPlayer, obstacles: [], hazards: hitHazards, summon: () => undefined, onDefeated: () => undefined })
+    hitScene.add(boss.root)
+    hitCombat.registerTarget(boss)
+    try {
+      boss.update(1.8)
+      const bounds = boss.getCombatBounds()
+      check(bounds.footprint?.radiusX === definition.damageHitbox?.radiusX && bounds.footprint?.radiusZ === definition.damageHitbox?.radiusZ, 'Boss exposes configured anatomical damage axes')
+      check(boss.getPhysicalBounds().radius === definition.collisionRadius, 'Boss physical radius stays unchanged')
+      hitCombat.spawnProjectile({ ...REVOLVER_ATTACK, projectileSpeed: 1000 }, PLAYER_COMBAT_SOURCE, new THREE.Vector3(0, 1, 0), new THREE.Vector3(1, 0, 0))
+      hitCombat.update(0.01, false, new THREE.Vector3(), new THREE.Vector3(1, 0, 0))
+      check(boss.currentHealth === definition.maxHealth - REVOLVER_ATTACK.damage, 'Every boss receives fast swept projectile damage')
+      check(boss.getSnapshot().healthRatio === boss.currentHealth / definition.maxHealth, 'Boss main HUD snapshot reflects projectile damage')
+      boss.root.position.set(7, 0, 3)
+      boss.root.rotation.y = Math.PI / 2
+      const moved = boss.getCombatBounds()
+      check(moved.x === 7 && moved.z === 3 && moved.footprint?.rotation === Math.PI / 2, 'Boss damage footprint follows movement and orientation')
+    } finally {
+      boss.dispose()
+      hitHazards.clear()
+      hitCombat.dispose()
+      check(hitScene.children.length === 0, 'Boss hitbox, model, telegraph and projectiles release without floating health meshes')
+    }
+  }
 
   const scene = new THREE.Scene()
   const combat = new CombatSystem(scene, [], REVOLVER_ATTACK, PLAYER_COMBAT_SOURCE)

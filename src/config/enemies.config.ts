@@ -1,6 +1,7 @@
 import type { EnemyDefinition } from '../enemies/Enemy.types'
 import { VISUAL_THEME } from './visualTheme'
 import { ENEMY_BALANCE } from './enemyBalance.config'
+import { DEFAULT_ENEMY_DAMAGE_HITBOX_SCALE } from './collision.config'
 
 const BALANCE = ENEMY_BALANCE
 
@@ -10,6 +11,7 @@ const CRAWLER: EnemyDefinition = Object.freeze({
   maxHealth: BALANCE.crawler.maxHealth,
   moveSpeed: BALANCE.crawler.moveSpeed,
   collisionRadius: BALANCE.crawler.collisionRadius,
+  damageHitboxRadius: BALANCE.crawler.collisionRadius * DEFAULT_ENEMY_DAMAGE_HITBOX_SCALE,
   detectionRange: BALANCE.crawler.detectionRange,
   behavior: Object.freeze({ type: 'chase', stopDistance: BALANCE.crawler.stopDistance }),
   attacks: Object.freeze([
@@ -38,6 +40,7 @@ const MECHANICAL_OUTLAW: EnemyDefinition = Object.freeze({
   maxHealth: BALANCE.outlaw.maxHealth,
   moveSpeed: BALANCE.outlaw.moveSpeed,
   collisionRadius: BALANCE.outlaw.collisionRadius,
+  damageHitboxRadius: BALANCE.outlaw.collisionRadius * DEFAULT_ENEMY_DAMAGE_HITBOX_SCALE,
   detectionRange: BALANCE.outlaw.detectionRange,
   behavior: Object.freeze({ type: 'keep-distance', preferredDistance: BALANCE.outlaw.preferredDistance, tolerance: BALANCE.outlaw.distanceTolerance }),
   attacks: Object.freeze([

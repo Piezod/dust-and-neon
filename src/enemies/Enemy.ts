@@ -9,6 +9,7 @@ import type { EnemyDefinition, EnemyDeathEvent, EnemyState } from './Enemy.types
 import type { GameEventBus } from '../events/GameEventBus'
 import { findGridPath, hasClearMovementSegment, hasLineOfSight, isNavigationPointClear } from './EnemyNavigation'
 import { ENEMY_BALANCE } from '../config/enemyBalance.config'
+import { DEFAULT_ENEMY_DAMAGE_HITBOX_SCALE } from '../config/collision.config'
 import { StatusEffects } from '../combat/StatusEffects'
 import { ExperimentalAttackController, type ExperimentalEnemyAttackContext } from './ExperimentalAttackController'
 import type { EnemyHazardManager } from './EnemyHazardManager'
@@ -99,7 +100,6 @@ export class Enemy implements Damageable {
         }
       })
       : null
-    this.visual.updateHealth(1)
   }
 
   private readonly behavior: EnemyBehavior
@@ -145,8 +145,16 @@ export class Enemy implements Damageable {
     this.visual.setPatternAttack(null, null, 0, this.root.position)
   }
 
-  getCombatBounds(): CombatBounds {
+  getPhysicalBounds(): CombatBounds {
     return { x: this.root.position.x, z: this.root.position.z, radius: this.definition.collisionRadius }
+  }
+
+  getCombatBounds(): CombatBounds {
+    return {
+      x: this.root.position.x,
+      z: this.root.position.z,
+      radius: this.definition.damageHitboxRadius ?? this.definition.collisionRadius * DEFAULT_ENEMY_DAMAGE_HITBOX_SCALE,
+    }
   }
 
   getDamageMultiplier(type: DamageType, sourcePosition?: readonly [number, number, number]): number {
@@ -186,7 +194,6 @@ export class Enemy implements Damageable {
       soundId: this.definition.sounds?.damaged,
     })
     this.visual.flashOnHit(actualDamage)
-    this.visual.updateHealth(this.health / this.definition.maxHealth)
     if (this.health === 0) this.die()
   }
 
@@ -421,7 +428,7 @@ export class Enemy implements Damageable {
     const separationDistance = ENEMY_BALANCE.separation.radius
     for (const other of otherEnemies) {
       if (other === this || other.isDead) continue
-      const bounds = other.getCombatBounds()
+      const bounds = other.getPhysicalBounds()
       const deltaX = this.root.position.x - bounds.x
       const deltaZ = this.root.position.z - bounds.z
       const separationRange = this.definition.collisionRadius + bounds.radius + separationDistance
@@ -441,7 +448,7 @@ export class Enemy implements Damageable {
   private isClearOfEnemies(x: number, z: number, radius: number, otherEnemies: readonly Enemy[]): boolean {
     return otherEnemies.every((other) => {
       if (other === this || other.isDead) return true
-      const bounds = other.getCombatBounds()
+      const bounds = other.getPhysicalBounds()
       return Math.hypot(x - bounds.x, z - bounds.z) >= radius + bounds.radius + 0.12
     })
   }
@@ -464,7 +471,7 @@ export class Enemy implements Damageable {
     if (playerDistance < radius + player.radius) return false
     for (const other of otherEnemies) {
       if (other === this || other.isDead) continue
-      const bounds = other.getCombatBounds()
+      const bounds = other.getPhysicalBounds()
       if (Math.hypot(x - bounds.x, z - bounds.z) < radius + bounds.radius) return false
     }
     return true

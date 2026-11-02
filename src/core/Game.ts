@@ -152,7 +152,7 @@ export class Game {
     this.resize()
     this.controller = new PlayerController(this.input, this.camera, this.player, this.renderer.domElement, this.world.obstacles, this.events)
     this.setTouchControlsEnabled(this.settings.showTouchControls)
-    this.debugVisualization = new GameDebugVisualization(this.scene, this.world, this.enemies, this.player, this.combat, this.events)
+    this.debugVisualization = new GameDebugVisualization(this.scene, this.world, this.enemies, this.player, this.combat, this.events, () => this.bossManager.currentBoss)
     this.hud = new PlayerHUD(container, this.player.stats, this.player.abilities, this.enemies, this.runState.wallet, this.loot, this.waves, {
       setLayer: (layer, visible) => this.debugVisualization.setLayer(layer, visible),
       spawnEffect: () => {

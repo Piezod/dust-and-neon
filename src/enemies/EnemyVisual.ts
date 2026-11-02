@@ -9,7 +9,6 @@ export class EnemyVisual {
   private readonly materials = new Set<THREE.Material>()
   private readonly bodyMaterial: THREE.MeshStandardMaterial
   private readonly accentMaterial: THREE.MeshStandardMaterial
-  private readonly healthFill: THREE.Mesh
   private readonly attackTelegraph: THREE.Mesh<THREE.TorusGeometry, THREE.MeshBasicMaterial>
   private readonly patternTelegraph: THREE.Group | null
   private readonly patternLine: THREE.LineSegments<THREE.BufferGeometry, THREE.LineBasicMaterial> | null
@@ -35,10 +34,6 @@ export class EnemyVisual {
       for (const part of definition.parts) this.createPart(part, this.bodyMaterial, this.accentMaterial, eyes)
     } else if (definition.bodyHeight < 1.3) this.createCrawler(this.bodyMaterial, this.accentMaterial, eyes, definition.bodyHeight)
     else this.createOutlaw(this.bodyMaterial, this.accentMaterial, eyes, definition.bodyHeight)
-    this.healthFill = this.box(0x20, 0.045, 0.035, this.material(VISUAL_THEME.colors.danger), 0, definition.bodyHeight + 0.35, 0)
-    const healthTrack = this.box(0.24, 0.065, 0.045, this.material('#171c1b'), 0, definition.bodyHeight + 0.35, -0.01)
-    healthTrack.renderOrder = 2
-    this.healthFill.renderOrder = 3
     this.attackTelegraph = this.mesh(new THREE.TorusGeometry(0.72, 0.055, 5, 28), new THREE.MeshBasicMaterial({
       color: VISUAL_THEME.colors.danger,
       transparent: true,
@@ -77,12 +72,6 @@ export class EnemyVisual {
       this.patternRingGeometry = null
       this.patternRingMaterial = null
     }
-  }
-
-  updateHealth(ratio: number): void {
-    const fraction = THREE.MathUtils.clamp(ratio, 0, 1)
-    this.healthFill.scale.x = fraction
-    this.healthFill.position.x = -(1 - fraction) * 0.1
   }
 
   flashOnHit(amount: number): void {
@@ -318,6 +307,7 @@ export class EnemyVisual {
 
   private mesh(geometry: THREE.BufferGeometry, material: THREE.Material, x: number, y: number, z: number): THREE.Mesh {
     this.geometries.add(geometry)
+    this.materials.add(material)
     const mesh = new THREE.Mesh(geometry, material)
     mesh.position.set(x, y, z)
     mesh.castShadow = true

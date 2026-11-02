@@ -24,6 +24,71 @@ export function runEnemyChecks(): string {
   const outlawDefinition = ENEMY_DEFINITIONS.find((definition) => definition.id === 'mechanical-outlaw')!
   check(Object.isFrozen(crawlerDefinition) && Object.isFrozen(crawlerDefinition.attacks), 'Enemy definition and attacks are immutable')
 
+  for (const definition of ENEMY_DEFINITIONS) {
+    for (const speed of [25, 1000]) {
+      const hitScene = new THREE.Scene()
+      const hitPlayer = new Player()
+      hitPlayer.position.set(-20, 0, 0)
+      const hitCombat = new CombatSystem(hitScene, [], REVOLVER_ATTACK, PLAYER_COMBAT_SOURCE)
+      const customDefinition = { ...definition, id: 'check.custom-hitbox', damageHitboxRadius: 0.58 }
+      const hitManager = new EnemyManager(hitScene, [], hitCombat, hitPlayer, [definition, customDefinition])
+      const trackedResources = new Set<THREE.BufferGeometry | THREE.Material>()
+      let disposedResources = 0
+      try {
+        const target = hitManager.spawn(definition.id, new THREE.Vector3(5, 0, 0), 0)
+        const sibling = hitManager.spawn(customDefinition.id, new THREE.Vector3(9, 0, 4), 0)
+        close(sibling.getCombatBounds().radius, 0.58, 'Enemy type can override its damage radius independently')
+        close(sibling.getPhysicalBounds().radius, definition.collisionRadius, 'Damage override does not change physical size')
+        for (const enemy of [target, sibling]) enemy.root.traverse((object) => {
+          if (!(object instanceof THREE.Mesh)) return
+          trackedResources.add(object.geometry)
+          for (const material of Array.isArray(object.material) ? object.material : [object.material]) trackedResources.add(material)
+        })
+        for (const resource of trackedResources) resource.addEventListener('dispose', () => disposedResources++)
+        close(target.getPhysicalBounds().radius, definition.collisionRadius, 'Physical radius remains unchanged')
+        close(target.getCombatBounds().radius, definition.collisionRadius * 1.3, 'Normal damage radius expands exactly 30 percent')
+        let healthMeshes = 0
+        target.root.traverse((object) => {
+          if (!(object instanceof THREE.Mesh) || !(object.geometry instanceof THREE.BoxGeometry)) return
+          const parameters = object.geometry.parameters
+          if (parameters.width === 32 || parameters.width === 0.24 && parameters.height === 0.065 && parameters.depth === 0.045) healthMeshes++
+        })
+        check(healthMeshes === 0, 'Normal visual allocates neither health fill nor health track geometry')
+        const projectile = { ...REVOLVER_ATTACK, projectileSpeed: speed }
+        for (const side of [-1, 1]) {
+          const previousHealth = target.currentHealth
+          const edge = side * (target.getCombatBounds().radius + projectile.projectileRadius - 0.001)
+          hitCombat.spawnProjectile(projectile, PLAYER_COMBAT_SOURCE, new THREE.Vector3(0, 1, edge), new THREE.Vector3(1, 0, 0))
+          hitCombat.update(10 / speed, false, new THREE.Vector3(), new THREE.Vector3(1, 0, 0))
+          close(target.currentHealth, previousHealth - projectile.damage, 'Swept bullet hits both expanded edges even outside the physical radius')
+          check(hitCombat.projectileCount === 0, 'Edge hit consumes the projectile once')
+          hitCombat.update(0.1, false, new THREE.Vector3(), new THREE.Vector3(1, 0, 0))
+          close(target.currentHealth, previousHealth - projectile.damage, 'Consumed projectile cannot apply duplicate damage')
+        }
+        close(sibling.currentHealth, definition.maxHealth, 'Sibling hitboxes and health remain independent')
+        const outside = target.getCombatBounds().radius + projectile.projectileRadius + 0.01
+        const beforeMiss = target.currentHealth
+        hitCombat.spawnProjectile(projectile, PLAYER_COMBAT_SOURCE, new THREE.Vector3(0, 1, outside), new THREE.Vector3(1, 0, 0))
+        hitCombat.update(25 / speed, false, new THREE.Vector3(), new THREE.Vector3(1, 0, 0))
+        close(target.currentHealth, beforeMiss, 'Bullet beyond the damage boundary misses')
+        hitPlayer.position.set(-5, 0, 0)
+        target.update(0.1, hitPlayer, [])
+        const movingBounds = target.getCombatBounds()
+        check(movingBounds.x !== 5, 'Enemy actually moves before the next swept shot')
+        check(movingBounds.x === target.root.position.x && movingBounds.z === target.root.position.z, 'Damage hitbox follows current moving root')
+        hitCombat.spawnProjectile(projectile, PLAYER_COMBAT_SOURCE, new THREE.Vector3(0, 1, movingBounds.z), new THREE.Vector3(1, 0, 0))
+        hitCombat.update(10 / speed, false, new THREE.Vector3(), new THREE.Vector3(1, 0, 0))
+        close(target.currentHealth, beforeMiss - projectile.damage, 'Moving enemy receives damage at its updated position')
+      } finally {
+        hitManager.dispose()
+        hitCombat.dispose()
+        hitPlayer.dispose()
+        check(hitScene.children.length === 0, 'Hitbox test releases enemy, telegraph and projectile resources')
+        check(disposedResources === trackedResources.size, 'Every enemy geometry and material is disposed exactly once')
+      }
+    }
+  }
+
   const scene = new THREE.Scene()
   const player = new Player()
   scene.add(player.root)

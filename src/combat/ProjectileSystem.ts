@@ -7,6 +7,13 @@ import { VISUAL_THEME } from '../config/visualTheme'
 
 const MAX_ACTIVE_PROJECTILES = 256
 
+interface DebugProjectilePath {
+  readonly start: readonly [number, number, number]
+  readonly end: readonly [number, number, number]
+  readonly faction: string
+  remainingSeconds: number
+}
+
 interface Projectile {
   readonly mesh: THREE.Mesh<THREE.SphereGeometry, THREE.MeshStandardMaterial>
   readonly trail: THREE.Mesh<THREE.ConeGeometry, THREE.MeshBasicMaterial>
@@ -29,6 +36,7 @@ export class ProjectileSystem {
   private readonly start = new THREE.Vector2()
   private readonly end = new THREE.Vector2()
   private readonly segment = new THREE.Vector2()
+  private readonly recentPaths: DebugProjectilePath[] = []
   private disposed = false
   private readonly parent: THREE.Object3D
   private readonly events?: GameEventBus
@@ -43,15 +51,15 @@ export class ProjectileSystem {
   }
 
   getDebugPaths(): readonly { readonly start: readonly [number, number, number]; readonly end: readonly [number, number, number]; readonly faction: string }[] {
-    return this.projectiles.map((projectile) => {
+    return [...this.recentPaths, ...this.projectiles.map((projectile) => {
       const start = projectile.mesh.position
       const length = Math.min(5, projectile.remainingRange)
       return {
-        start: [start.x, start.y, start.z],
-        end: [start.x + projectile.direction.x * length, start.y, start.z + projectile.direction.z * length],
+        start: [start.x, start.y, start.z] as const,
+        end: [start.x + projectile.direction.x * length, start.y, start.z + projectile.direction.z * length] as const,
         faction: projectile.source.faction,
       }
-    })
+    })]
   }
 
   spawn(definition: ProjectileDefinition, source: CombatSource, position: THREE.Vector3, direction: THREE.Vector3): void {
@@ -114,6 +122,10 @@ export class ProjectileSystem {
 
   update(deltaTime: number, obstacles: readonly THREE.Box2[], targets: readonly Damageable[]): void {
     const elapsed = Math.max(0, Number.isFinite(deltaTime) ? deltaTime : 0)
+    for (let index = this.recentPaths.length - 1; index >= 0; index--) {
+      this.recentPaths[index].remainingSeconds -= elapsed
+      if (this.recentPaths[index].remainingSeconds <= 0) this.recentPaths.splice(index, 1)
+    }
     for (let index = this.projectiles.length - 1; index >= 0; index--) {
       const projectile = this.projectiles[index]
       if (projectile.arc) {
@@ -145,6 +157,7 @@ export class ProjectileSystem {
         if (targetHit && targetHit.entry < (wallEntry ?? Infinity)) {
           const hitPoint = this.start.clone().lerp(this.end, targetHit.entry)
           projectile.mesh.position.set(hitPoint.x, projectile.mesh.position.y, hitPoint.y)
+          this.recordDebugPath(projectile)
           const context: DamageContext = {
             sourceId: projectile.source.id,
             sourceFaction: projectile.source.faction,
@@ -173,6 +186,7 @@ export class ProjectileSystem {
         if (wallEntry !== null) {
           const hitPoint = this.start.clone().lerp(this.end, wallEntry)
           projectile.mesh.position.set(hitPoint.x, projectile.mesh.position.y, hitPoint.y)
+          this.recordDebugPath(projectile)
           this.events?.emit({
             type: 'projectile-impact',
             projectileId: projectile.definition.id,
@@ -187,6 +201,7 @@ export class ProjectileSystem {
         }
 
         projectile.mesh.position.set(this.end.x, projectile.mesh.position.y, this.end.y)
+        this.recordDebugPath(projectile)
         this.updateTrail(projectile.trail, projectile.mesh.position, projectile.direction, projectile.definition.id)
         projectile.remainingRange -= distance
       }
@@ -197,6 +212,7 @@ export class ProjectileSystem {
   dispose(): void {
     if (this.disposed) return
     this.disposed = true
+    this.recentPaths.length = 0
     while (this.projectiles.length > 0) this.removeAt(this.projectiles.length - 1)
     this.geometry.dispose()
     this.trailGeometry.dispose()
@@ -204,6 +220,15 @@ export class ProjectileSystem {
     this.materials.clear()
     for (const material of this.trailMaterials.values()) material.dispose()
     this.trailMaterials.clear()
+  }
+
+  private recordDebugPath(projectile: Projectile): void {
+    const end = projectile.mesh.position
+    this.recentPaths.push({
+      start: [this.start.x, end.y, this.start.y], end: [end.x, end.y, end.z],
+      faction: projectile.source.faction, remainingSeconds: 0.35,
+    })
+    if (this.recentPaths.length > 64) this.recentPaths.shift()
   }
 
   private getMaterial(definition: ProjectileDefinition): THREE.MeshStandardMaterial {
@@ -268,7 +293,25 @@ export class ProjectileSystem {
     for (const target of targets) {
       if (target.combatId === projectile.source.id || target.faction === projectile.source.faction) continue
       const bounds = target.getCombatBounds()
-      const entry = this.segmentCircleEntry(start, end, bounds.x, bounds.z, bounds.radius + projectile.definition.projectileRadius)
+      const footprint = bounds.footprint
+      let entry: number | null
+      if (footprint) {
+        const cosine = Math.cos(footprint.rotation)
+        const sine = Math.sin(footprint.rotation)
+        const radiusX = footprint.radiusX + projectile.definition.projectileRadius
+        const radiusZ = footprint.radiusZ + projectile.definition.projectileRadius
+        const localStart = new THREE.Vector2(
+          ((start.x - bounds.x) * cosine - (start.y - bounds.z) * sine) / radiusX,
+          ((start.x - bounds.x) * sine + (start.y - bounds.z) * cosine) / radiusZ,
+        )
+        const localEnd = new THREE.Vector2(
+          ((end.x - bounds.x) * cosine - (end.y - bounds.z) * sine) / radiusX,
+          ((end.x - bounds.x) * sine + (end.y - bounds.z) * cosine) / radiusZ,
+        )
+        entry = this.segmentCircleEntry(localStart, localEnd, 0, 0, 1)
+      } else {
+        entry = this.segmentCircleEntry(start, end, bounds.x, bounds.z, bounds.radius + projectile.definition.projectileRadius)
+      }
       if (entry !== null && (nearest === null || entry < nearest.entry)) nearest = { target, entry }
     }
     return nearest

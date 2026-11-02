@@ -34,6 +34,17 @@ export function runGameDebugVisualizationChecks(): string {
     check(scene.getObjectByName('DebugWorldColliders')?.visible === true, 'World collider overlay can be toggled')
     const enemyBounds = scene.getObjectByName('DebugEnemyColliders') as THREE.LineSegments | null
     check((enemyBounds?.geometry.drawRange.count ?? 0) > 0, 'Enemy collider overlay contains live bounds')
+    check(enemyBounds?.geometry.drawRange.count === 128, 'F3 renders independent 32-segment physical and damage rings')
+    const positions = enemyBounds!.geometry.getAttribute('position')
+    const colors = enemyBounds!.geometry.getAttribute('color')
+    const enemy = enemies.getAlive()[0]
+    check(Math.abs(positions.getX(0) - enemy.root.position.x - enemy.definition.collisionRadius) < 1e-5, 'F3 physical ring uses the unchanged movement radius')
+    check(Math.abs(positions.getX(64) - enemy.root.position.x - enemy.getCombatBounds().radius) < 1e-5, 'F3 damage ring uses the enlarged hitbox')
+    check(colors.getX(0) !== colors.getX(64), 'Physical and damage hitboxes use distinct vertex colors')
+    world.rebuildScenario('crystal-canyon')
+    visualization.update()
+    const worldLines = scene.getObjectByName('DebugWorldColliders') as THREE.LineSegments
+    check(worldLines.geometry.drawRange.count === world.obstacles.length * 24, 'F3 refreshes structural boxes after scenario rebuild without stale decoration')
     const sightLines = scene.getObjectByName('DebugEnemyLineOfSight') as THREE.LineSegments | null
     check((sightLines?.geometry.drawRange.count ?? 0) === 2, 'Line-of-sight overlay renders one segment per enemy')
 

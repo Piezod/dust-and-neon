@@ -1,11 +1,12 @@
 import * as THREE from 'three'
 import type { GraphicsQuality } from '../core/GameSettings.types'
 import { getGraphicsProfile, VISUAL_THEME } from '../config/visualTheme'
+import { WORLD_COLLISION_PROFILES, type WorldObstacleKind } from '../config/collision.config'
 import { CAMPAIGN_WORLD_LAYOUTS, type CampaignWorldFeature, type CampaignWorldLayout as CampaignWorldLayoutsValue } from './campaignWorldLayouts'
 
 export interface WorldObstacleDebugRecord {
   readonly id: string
-  readonly kind: string
+  readonly kind: WorldObstacleKind
   readonly collisionScale: number
   readonly bounds: THREE.Box2
 }
@@ -14,6 +15,7 @@ export type WorldScenarioId = 'ghost-town' | 'crystal-canyon' | 'red-foundry' | 
 
 export class World {
   readonly root = new THREE.Group()
+  collisionRevision = 0
   private readonly solidObstacles: THREE.Box2[] = []
   private readonly obstacleDebugRecords: WorldObstacleDebugRecord[] = []
   private readonly geometries = new Set<THREE.BufferGeometry>()
@@ -67,6 +69,7 @@ export class World {
   }
 
   private buildScenario(): void {
+    this.collisionRevision++
     this.createTerrain()
     if (this.scenario === 'ghost-town') {
       this.createBuilding(-7, -6, 8, 6, 5, true, 'LAST LIGHT', VISUAL_THEME.colors.saloonWall)
@@ -118,7 +121,8 @@ export class World {
     }
   }
 
-  private addObstacle(object: THREE.Object3D, horizontalScale = 1, kind = 'structure'): void {
+  private addObstacle(object: THREE.Object3D, horizontalScale = 1, kind: WorldObstacleKind = 'structure'): void {
+    if (WORLD_COLLISION_PROFILES[kind].category === 'decoration') return
     object.updateWorldMatrix(true, true)
     const bounds = new THREE.Box3().setFromObject(object)
     const centerX = (bounds.min.x + bounds.max.x) / 2

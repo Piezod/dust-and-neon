@@ -60,6 +60,7 @@ const eclipseSmelterPhases = [
 export const BOSS_DEFINITIONS: readonly BossDefinition[] = Object.freeze([
   {
     id: 'iron-sheriff', name: 'EL SHERIFF DE HIERRO', subtitle: 'El ultimo alguacil de Pueblo Fantasma', maxHealth: 1250,
+    damageHitbox: { radiusX: 1.15, radiusZ: 1.05 },
     collisionRadius: 1.15, moveSpeed: 2.1, preferredDistance: 4.4, movement: 'orbit', detectionRange: 26, arenaRadius: 16, arenaColor: '#42e5d1', maxSummons: 4,
     phases: sheriffPhases,
     attacks: [
@@ -78,6 +79,7 @@ export const BOSS_DEFINITIONS: readonly BossDefinition[] = Object.freeze([
   },
   {
     id: 'abyss-matriarch', name: 'LA MATRIARCA DEL ABISMO', subtitle: 'La reina bajo el Cañon de Cristal', maxHealth: 1650,
+    damageHitbox: { radiusX: 2.4, radiusZ: 2.4 },
     collisionRadius: 1.65, moveSpeed: 1.7, preferredDistance: 10, movement: 'hold', detectionRange: 28, arenaRadius: 17, arenaColor: '#d95aff', maxSummons: 5,
     phases: matriarchPhases,
     attacks: [
@@ -98,6 +100,7 @@ export const BOSS_DEFINITIONS: readonly BossDefinition[] = Object.freeze([
   },
   {
     id: 'crimson-preacher', name: 'EL PREDICADOR CARMESI', subtitle: 'La voz que despierta la Fundicion Roja', maxHealth: 1900,
+    damageHitbox: { radiusX: 1.65, radiusZ: 1.65 },
     collisionRadius: 1.25, moveSpeed: 2.2, preferredDistance: 9, movement: 'orbit', detectionRange: 30, arenaRadius: 17, arenaColor: '#f05a46', maxSummons: 5,
     phases: preacherPhases,
     attacks: [
@@ -122,6 +125,7 @@ export const BOSS_DEFINITIONS: readonly BossDefinition[] = Object.freeze([
   },
   {
     id: 'mud-matriarch', name: 'LA MATRIARCA DEL FANGO', subtitle: 'La guardiana de las pasarelas del pantano', maxHealth: 2100,
+    damageHitbox: { radiusX: 1.95, radiusZ: 1.8 },
     collisionRadius: 1.55, moveSpeed: 1.65, preferredDistance: 8, movement: 'hold', detectionRange: 30, arenaRadius: 18, arenaColor: '#77dfa8', maxSummons: 3,
     phases: mudMatriarchPhases,
     attacks: [
@@ -142,6 +146,7 @@ export const BOSS_DEFINITIONS: readonly BossDefinition[] = Object.freeze([
   },
   {
     id: 'storm-marshal', name: 'EL ALGUACIL DE LA TORMENTA', subtitle: 'El ultimo vigia del observatorio', maxHealth: 2350,
+    damageHitbox: { radiusX: 1.25, radiusZ: 1.25 },
     collisionRadius: 1.2, moveSpeed: 2, preferredDistance: 10, movement: 'orbit', detectionRange: 32, arenaRadius: 18, arenaColor: '#54dcec', maxSummons: 3,
     phases: stormMarshalPhases,
     attacks: [
@@ -162,6 +167,7 @@ export const BOSS_DEFINITIONS: readonly BossDefinition[] = Object.freeze([
   },
   {
     id: 'eclipse-smelter', name: 'EL FUNDIDOR DEL ECLIPSE', subtitle: 'El nucleo viviente del complejo alienigena', maxHealth: 2800,
+    damageHitbox: { radiusX: 1.45, radiusZ: 1.25 },
     collisionRadius: 1.45, moveSpeed: 1.8, preferredDistance: 9, movement: 'hold', detectionRange: 32, arenaRadius: 20, arenaColor: '#c38cff', maxSummons: 0,
     phases: eclipseSmelterPhases,
     attacks: [

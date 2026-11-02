@@ -193,7 +193,7 @@ export class EnemyManager {
 
   private clearOfEnemies(x: number, z: number, radius: number): boolean {
     return Array.from(this.enemies.values()).every((enemy) => {
-      const bounds = enemy.getCombatBounds()
+      const bounds = enemy.getPhysicalBounds()
       return Math.hypot(x - bounds.x, z - bounds.z) >= radius + bounds.radius + 0.5
     })
   }

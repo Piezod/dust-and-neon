@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { World } from './World'
+import { WORLD_COLLISION_PROFILES } from '../config/collision.config'
 
 export function runWorldVisualChecks(): string {
   let checks = 0
@@ -44,10 +45,14 @@ export function runWorldVisualChecks(): string {
     check(dustCount(low) === 20 && dustCount(medium) === 56 && dustCount(high) === 150, 'Dust draw count follows quality profiles without vanishing in low quality')
     check(low.obstacles.length === medium.obstacles.length && medium.obstacles.length === high.obstacles.length, 'Graphics quality does not alter collision obstacles')
     const rockColliders = high.obstacleDebugInfo.filter((record) => record.kind === 'rock')
-    check(rockColliders.length > 0 && rockColliders.every((record) => record.collisionScale === 0.82), 'Large decorative rocks use tightened 82% collider bounds')
+    check(rockColliders.length === 0 && high.root.getObjectByName('Rock:90') !== undefined, 'Decorative rocks remain visible without registering solid colliders')
+    for (const world of [low, medium, high, canyon, foundry, swamp, observatory, eclipse]) {
+      check(world.obstacleDebugInfo.every((record) => WORLD_COLLISION_PROFILES[record.kind].category === 'structure'), 'Every scenario excludes natural decoration from its shared solid registry')
+      check(world.obstacleDebugInfo.length === world.obstacles.length, 'F3 records exactly the obstacles used by movement, navigation, projectiles and sight')
+    }
     check(pointLightsVisible(low).every((visible) => !visible), 'Low quality disables local neon and crystal lights')
     check(pointLightsVisible(medium).some(Boolean) && pointLightsVisible(high).some(Boolean), 'Medium/high profiles keep local atmosphere lighting')
-    check(canyon.obstacleDebugInfo.some((record) => record.kind === 'mesa') && canyon.obstacleDebugInfo.some((record) => record.kind === 'crystal-base'), 'Crystal Canyon builds its own mesa and crystal collision layout')
+    check(canyon.obstacleDebugInfo.some((record) => record.kind === 'mesa') && !canyon.obstacleDebugInfo.some((record) => record.kind === 'crystal-base'), 'Canyon mesas remain structural while decorative crystal bases are passable')
     check(foundry.obstacleDebugInfo.some((record) => record.kind === 'machinery') && foundry.root.getObjectByName('FoundryTank:-14') !== undefined, 'Red Foundry contains industrial landmarks and colliders')
     check(swamp.root.getObjectByName('SporeCap:spore-canopy-north') !== undefined && swamp.root.getObjectByName('Walkway:raised-crossing-west') !== undefined,
       'Spore Swamp builds a distinct canopy and raised crossings')

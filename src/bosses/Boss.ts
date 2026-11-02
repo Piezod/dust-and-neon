@@ -105,7 +105,20 @@ export class Boss implements Damageable {
   }
 
   getCombatBounds(): CombatBounds {
+    const hitbox = this.definition.damageHitbox
+    return {
+      x: this.root.position.x, z: this.root.position.z,
+      radius: hitbox ? Math.max(hitbox.radiusX, hitbox.radiusZ) : this.definition.collisionRadius,
+      ...(hitbox ? { footprint: { ...hitbox, rotation: this.root.rotation.y } } : {}),
+    }
+  }
+
+  getPhysicalBounds(): CombatBounds {
     return { x: this.root.position.x, z: this.root.position.z, radius: this.definition.collisionRadius }
+  }
+
+  get navigationWaypoints(): readonly THREE.Vector3[] {
+    return this.path.slice(this.pathIndex).map((point) => point.clone())
   }
 
   getSnapshot(): BossSnapshot {

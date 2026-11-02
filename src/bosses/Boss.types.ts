@@ -80,6 +80,7 @@ export interface BossDefinition {
   readonly subtitle: string
   readonly maxHealth: number
   readonly collisionRadius: number
+  readonly damageHitbox?: { readonly radiusX: number; readonly radiusZ: number }
   readonly moveSpeed: number
   readonly preferredDistance: number
   readonly movement: BossMovementStyle

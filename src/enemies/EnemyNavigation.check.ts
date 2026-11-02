@@ -23,7 +23,7 @@ export function runEnemyNavigationChecks(): string {
   const path = findGridPath(start, goal, obstacles, radius)
   check(path !== null && path.length > 0, 'A* finds a route around an obstacle')
   const points = [start, ...path!]
-  check(points.some((point) => Math.abs(point.z) > 1.55), 'Route detours beyond the inflated rock boundary')
+  check(points.some((point) => Math.abs(point.z) > 1.55), 'Route detours beyond the inflated wall boundary')
   for (const point of path!) check(isNavigationPointClear(point, obstacles, radius), 'Every waypoint respects the enemy collision radius')
   for (let index = 1; index < points.length; index++) {
     check(hasClearMovementSegment(points[index - 1], points[index], obstacles, radius), 'Smoothed route segments remain collision-free')
@@ -32,14 +32,7 @@ export function runEnemyNavigationChecks(): string {
   check(findGridPath(start, goal, enclosed, radius) === null, 'A* reports a fully blocked corridor instead of crossing it')
 
   const world = new World('low')
-  const centralRock = world.obstacleDebugInfo.find((record) => record.id === 'Rock:90')
-  check(centralRock !== undefined && centralRock.collisionScale === 0.82, 'Central spawn-lane rock uses its tightened collider')
-  if (centralRock) {
-    const centerX = (centralRock.bounds.min.x + centralRock.bounds.max.x) / 2
-    const centerZ = (centralRock.bounds.min.y + centralRock.bounds.max.y) / 2
-    const rockPath = findGridPath(new THREE.Vector3(centerX - 5, 0, centerZ), new THREE.Vector3(centerX + 5, 0, centerZ), [centralRock.bounds], radius)
-    check(rockPath !== null && rockPath.some((point) => Math.abs(point.z - centerZ) > 1.55), 'A* routes around the actual Rock:90 collider')
-  }
+  check(world.root.getObjectByName('Rock:90') !== undefined && !world.obstacleDebugInfo.some((record) => record.id === 'Rock:90'), 'Central spawn-lane rock remains visual but is absent from navigation obstacles')
   world.dispose()
 
   const scene = new THREE.Scene()
@@ -63,11 +56,11 @@ export function runEnemyNavigationChecks(): string {
       check((bounds.x - closestX) ** 2 + (bounds.z - closestZ) ** 2 >= radius ** 2 - 1e-8, 'Enemy never enters the wall collider')
     }
     const finalDistance = Math.hypot(enemy.root.position.x - player.position.x, enemy.root.position.z - player.position.z)
-    check(maximumDetour > 1.55, 'Enemy routes around the blocking rock rather than pushing through it')
+    check(maximumDetour > 1.55, 'Enemy routes around the blocking wall rather than pushing through it')
     check(finalDistance <= 1.55, 'Melee enemy reaches an accessible attack position')
     check(player.stats.currentHealth < initialHealth && enemy.hasLineOfSightToTarget, 'Enemy attacks after reaching a clear line of sight')
     const requestedInsideWall = enemies.trySpawn(crawler.id, new THREE.Vector3(4, 0, 0), 0)
-    check(requestedInsideWall !== null && isNavigationPointClear(requestedInsideWall.root.position, obstacles, crawler.collisionRadius), 'Spawn request inside a rock resolves to a clear position')
+    check(requestedInsideWall !== null && isNavigationPointClear(requestedInsideWall.root.position, obstacles, crawler.collisionRadius), 'Spawn request inside a wall resolves to a clear position')
   } finally {
     enemies.dispose()
     combat.dispose()
@@ -90,7 +83,7 @@ export function runEnemyNavigationChecks(): string {
   const shooter = rangedEnemies.spawn(outlaw.id, goal, 0)
   try {
     rangedEnemies.update(0)
-    check(!shooter.hasLineOfSightToTarget && rangedCombat.projectileCount === 0, 'Ranged enemy holds fire through a blocking rock')
+    check(!shooter.hasLineOfSightToTarget && rangedCombat.projectileCount === 0, 'Ranged enemy holds fire through a blocking wall')
     for (let frame = 0; frame < 600 && rangedCombat.projectileCount === 0; frame++) rangedEnemies.update(0.05)
     check(shooter.hasLineOfSightToTarget, 'Ranged enemy repositions to a visible firing lane')
     check(
@@ -105,10 +98,10 @@ export function runEnemyNavigationChecks(): string {
   }
 
   const actualWorld = new World('low')
-  const actualRock = actualWorld.obstacleDebugInfo.find((record) => record.id === 'Rock:90')
+  const actualRock = actualWorld.root.getObjectByName('Rock:90')
   if (!actualRock) throw new Error('Expected the deterministic central rock Rock:90')
-  const rockCenterX = (actualRock.bounds.min.x + actualRock.bounds.max.x) / 2
-  const rockCenterZ = (actualRock.bounds.min.y + actualRock.bounds.max.y) / 2
+  const rockCenterX = actualRock.position.x
+  const rockCenterZ = actualRock.position.z
   const sceneRock = new THREE.Scene()
   const scenePlayer = new Player()
   scenePlayer.root.position.set(rockCenterX + 5, 0, rockCenterZ)
@@ -120,8 +113,22 @@ export function runEnemyNavigationChecks(): string {
   const sceneInitialHealth = scenePlayer.stats.currentHealth
   let maximumRockDetour = 0
   try {
+    const rockStart = new THREE.Vector3(rockCenterX - 5, 0, rockCenterZ)
+    const rockEnd = new THREE.Vector3(rockCenterX + 5, 0, rockCenterZ)
+    check(hasLineOfSight(rockStart, rockEnd, actualWorld.obstacles), 'Decorative rock does not block line of sight')
+    check(hasClearMovementSegment(rockStart, rockEnd, actualWorld.obstacles, crawler.collisionRadius), 'Decorative rock does not block movement segments')
+    const directRoute = findGridPath(rockStart, rockEnd, actualWorld.obstacles, crawler.collisionRadius)
+    check(directRoute !== null && directRoute.length <= 2 && directRoute.every((point) => Math.abs(point.z - rockCenterZ) <= 0.51), 'A* crosses decoration with only normal grid rounding and no obstacle detour')
+    sceneCombat.spawnProjectile(REVOLVER_ATTACK, PLAYER_COMBAT_SOURCE, new THREE.Vector3(rockCenterX - 2, 1, rockCenterZ), new THREE.Vector3(1, 0, 0))
+    sceneCombat.update(4 / REVOLVER_ATTACK.projectileSpeed, false, rockStart, rockEnd)
+    check(sceneCombat.projectileCount === 1, 'Projectile crosses the decorative rock without disappearing')
+    scenePlayer.position.copy(rockStart)
+    scenePlayer.update(new THREE.Vector3(1, 0, 0), 10 / scenePlayer.speed, actualWorld.obstacles)
+    check(scenePlayer.position.distanceTo(rockEnd) < 0.01, 'Player crosses the actual rock with normal movement')
+    let routeFrames = 0
     for (let frame = 0; frame < 600 && scenePlayer.stats.currentHealth === sceneInitialHealth; frame++) {
       sceneEnemies.update(0.05)
+      if (sceneEnemy.navigationWaypoints.length > 0) routeFrames++
       maximumRockDetour = Math.max(maximumRockDetour, Math.abs(sceneEnemy.root.position.z - rockCenterZ))
       const bounds = sceneEnemy.getCombatBounds()
       for (const obstacle of actualWorld.obstacles) {
@@ -131,8 +138,8 @@ export function runEnemyNavigationChecks(): string {
       }
     }
     check(
-      maximumRockDetour > (actualRock.bounds.max.y - actualRock.bounds.min.y) / 2 + crawler.collisionRadius,
-      `Enemy visibly detours around Rock:90 in the real World collider set (max z=${maximumRockDetour.toFixed(2)})`,
+      maximumRockDetour < 0.01 && routeFrames === 0 && sceneEnemy.root.position.x > rockCenterX,
+      'Enemy crosses Rock:90 directly without detour, jitter or unnecessary A* routes',
     )
     check(scenePlayer.stats.currentHealth < sceneInitialHealth && sceneEnemy.hasLineOfSightToTarget, 'Enemy attacks only after navigating to a clear lane in World')
   } finally {

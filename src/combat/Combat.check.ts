@@ -84,6 +84,25 @@ export function runCombatChecks(): string {
   hitSystem.dispose()
   hitSystem.dispose()
   check(scene.children.length === 0, 'Disposal removes projectile meshes from scene')
+  check(hitSystem.getDebugProjectilePaths().length === 0, 'Disposal clears retained swept paths')
+
+  const ellipseSystem = new CombatSystem(new THREE.Scene(), [], ATTACK, SOURCE)
+  const ellipseTarget = createTarget('ellipse-target', 'enemies', 5, 0, 2)
+  let ellipseRotation = 0
+  ellipseTarget.getCombatBounds = () => ({ x: 5, z: 0, radius: 2, footprint: { radiusX: 2, radiusZ: 0.6, rotation: ellipseRotation } })
+  ellipseSystem.registerTarget(ellipseTarget)
+  const ellipseOrigin = new THREE.Vector3(0, 1, 1)
+  ellipseSystem.spawnProjectile(ATTACK, SOURCE, ellipseOrigin, new THREE.Vector3(1, 0, 0))
+  ellipseSystem.update(1, false, origin, aimPoint)
+  check(ellipseTarget.hits.length === 0, 'Narrow ellipse rejects a shot inside its enclosing circle but outside its anatomy')
+  ellipseRotation = Math.PI / 2
+  ellipseSystem.spawnProjectile(ATTACK, SOURCE, ellipseOrigin, new THREE.Vector3(1, 0, 0))
+  ellipseSystem.update(0.4, false, origin, aimPoint)
+  check(ellipseTarget.hits.length === 1, 'Oriented ellipse follows the rotating model and receives a swept hit')
+  check(ellipseSystem.getDebugProjectilePaths().some((path) => path.start[0] === 0 && path.end[0] < 5), 'F3 retains the actual swept entry segment after impact')
+  ellipseSystem.update(0.36, false, origin, aimPoint)
+  check(ellipseSystem.getDebugProjectilePaths().length === 0, 'Recent impact paths expire after 350 milliseconds')
+  ellipseSystem.dispose()
 
   const blockedScene = new THREE.Scene()
   const wall = new THREE.Box2(new THREE.Vector2(4, -1), new THREE.Vector2(5, 1))

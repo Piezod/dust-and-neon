@@ -7,7 +7,7 @@ import { delimiter, join, resolve } from 'node:path'
 const binaryDirectory = process.env.PATH.split(delimiter).find((directory) => existsSync(join(directory, 'playwright.cmd')) || existsSync(join(directory, 'playwright')))
 if (!binaryDirectory) throw new Error('Run with: npx --yes --package playwright -c "node tests/mobile-overhaul.integration.mjs"')
 const { chromium } = createRequire(join(binaryDirectory, 'runner.cjs'))('playwright')
-const output = resolve('docs/mobile-m1')
+const output = resolve(process.argv[2] ?? 'docs/mobile-m1')
 await mkdir(output, { recursive: true })
 const browser = await chromium.launch({ channel: process.env.M1_BROWSER_CHANNEL ?? 'msedge', headless: true, args: ['--enable-webgl', '--enable-unsafe-swiftshader'] })
 const results = { viewports: [], checks: [], interactions: [], errors: [] }
@@ -143,6 +143,10 @@ try {
           ['/src/ui/TouchControls.check.ts', ['runTouchControlsChecks']],
           ['/src/abilities/Ability.check.ts', ['runAbilityChecks']],
           ['/src/combat/Combat.check.ts', ['runCombatChecks']],
+          ['/src/enemies/Enemy.check.ts', ['runEnemyChecks']],
+          ['/src/enemies/EnemyNavigation.check.ts', ['runEnemyNavigationChecks']],
+          ['/src/world/World.check.ts', ['runWorldVisualChecks']],
+          ['/src/core/GameDebugVisualization.check.ts', ['runGameDebugVisualizationChecks']],
           ['/src/bosses/Boss.check.ts', ['runBossChecks']],
           ['/src/app/AppFeatures.check.ts', ['runAppFeatureChecks']],
           ['/src/game-modes/Campaign.check.ts', ['runCampaignChecks', 'runCampaignGameChecks']],

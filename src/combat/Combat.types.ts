@@ -48,4 +48,5 @@ export interface CombatBounds {
   readonly x: number
   readonly z: number
   readonly radius: number
+  readonly footprint?: { readonly radiusX: number; readonly radiusZ: number; readonly rotation: number }
 }

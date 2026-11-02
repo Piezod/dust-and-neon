@@ -57,10 +57,62 @@ Game / Scene composition root
 | 4E · Mejoras | Pantalla entre oleadas, oro, upgrades y perks | 🟨 Implementada; pendiente de validación visual del usuario |
 | 4F · Extensibilidad | Segundo enemigo, ataques alternativos y balance | 🟨 Implementada; pendiente de validación visual del usuario |
 | M1 · Mobile Overhaul | Cámara móvil, twin-stick, multitouch, Dash, HUD y menús táctiles | Implementada; pendiente de validación en Android/iPhone reales |
+| Hitbox Rework | Radios de daño independientes, decoración atravesable y eliminación de barras flotantes | Implementado y validado automáticamente el 2026-11-02; pendiente de aceptación visual del usuario |
 
 Para cada fase, Copilot debe actualizar la tabla y checklist **solo tras** completar los criterios de aceptación y recibir confirmación.
 
 ---
+
+## Hitbox Rework y limpieza de HUD
+
+Implementado el 2026-11-02. Sin nuevas armas, enemigos, capítulos, habilidades, dependencias, commit ni push. La aceptación del usuario y las pruebas en dispositivos físicos siguen pendientes.
+
+### Causas y dimensiones
+
+- `Enemy.getCombatBounds()` reutilizaba `collisionRadius`: un disparo rasante al modelo podía quedar fuera del radio físico. Los proyectiles ya tenían barrido continuo de segmento; no se ha sustituido por comprobaciones discretas por frame.
+- Las rocas grandes y bases decorativas estaban registradas en el mismo array sólido que edificios: bloqueaban movimiento, navegación, disparos y visión. No era un problema exclusivo de F3.
+- Algunos bosses tenían una superficie visible mayor que su collider: el caparazón de la Matriarca del Abismo se construye con una esfera de radio 2.4, pero recibía daño con radio 1.65.
+- Rastrero: radio físico **0.55**, radio de daño **0.715**. Forajido: físico **0.65**, daño **0.845**. Incremento del 30 %, configurable mediante `damageHitboxRadius`; las definiciones sin override usan el factor central.
+- Los proyectiles siguen sumando su propio radio al volumen objetivo. La posición se consulta desde la raíz de cada instancia; feedback y animación no cambian su radio físico.
+- Bosses: semiejes de daño X/Z independientes del movimiento y orientados con el modelo. Sheriff **1.15/1.05**; Matriarca del Abismo **2.4/2.4**; Predicador **1.65/1.65**; Matriarca del Fango **1.95/1.8**; Alguacil de la Tormenta **1.25/1.25**; Fundidor del Eclipse **1.45/1.25**. No se aplica el factor normal a los bosses.
+
+### Obstáculos, navegación y HUD
+
+- `src/config/collision.config.ts` centraliza decoración y estructuras con criterios coherentes para movimiento, proyectiles, línea de visión y navegación. Las entidades ofrecen límites físicos separados de sus límites de daño.
+- Dejan de crear o registrar `Box2`: **rock**, **crystal-base**, **cactus**, **spore-tree**, **spore-base**. Sus modelos, luces y efectos permanecen. Las piedras pequeñas ya carecían de collider.
+- Permanecen sólidos edificios, porches, mesas grandes que definen el escenario, maquinaria, antenas, generadores, pilares del Eclipse, barriles y cajas. No se alteran los límites existentes.
+- A* se conserva para estructuras, con sus márgenes y cooldown de replanificación existentes. La decoración no genera desvíos ni consultas contra referencias retiradas. La reconstrucción del mundo conserva la identidad del array de obstáculos.
+- Separación entre enemigos y espaciado de spawn usan `getPhysicalBounds()`, no el radio de daño ampliado. Así no se agrandan indirectamente las colisiones.
+- Se eliminan los meshes de relleno/fondo de barras normales, sus materiales y sus actualizaciones; no quedan barras ocultas. Se conservan HP interno, flash, eventos/números de daño, muerte y loot. Los bosses no tenían barra flotante y conservan la barra principal del HUD.
+- Se corrige además el registro del material del telégrafo normal para liberarlo junto a la geometría. Las pruebas escuchan los eventos `dispose` de todos los recursos visibles de ambas instancias y exigen una única liberación.
+- F3: físico rojo, daño cian, estructuras ámbar; incluye elipses y rutas de bosses, trayectorias previstas y barridos reales recientes. Historial acotado a 64 segmentos durante 350 ms, limpiado en `dispose`. El overlay estructural se refresca al cambiar de escenario y no incluye decoración.
+
+### Validación ejecutada
+
+- `npm run build`: correcto (TypeScript + Vite). Advertencia de Vite por chunk de juego mayor de 500 kB; no se ha ampliado el alcance a dividir bundles.
+- Pruebas en navegador: **37 combate**, **134 enemigos**, **2548 navegación**, **29 mundo**, **10 F3**, **64 bosses**, **29 habilidades/Dash**, **43 controles táctiles**. Incluyen ambos bordes de daño, disparos a 1000 unidades/s, objetivo movido, overrides por tipo, independencia de instancias, impacto único, misses exteriores, radios físicos intactos, elipse orientada, exclusión de decoración, estructuras sólidas, daño a seis bosses y limpieza real de recursos.
+- También pasan enemigos experimentales (73), loot (43), oleadas (25), dificultad/habilidades (33), extensibilidad (11), estadísticas (118), HUD (34), efectos (12), protocolo de red (17), aplicación (10), campaña (9 + 43), ciclo de vida (1), progresión (37 + 1) y muerte del jugador (12).
+- `npm run test:multiplayer:worker`: **3/3** después de iniciar el worker local con `npm run dev:worker`. El primer intento sin servidor devolvió `ECONNREFUSED`; no se modificó código del worker.
+- Runner Playwright/Edge existente ampliado: **667x375, 844x390, 932x430, 915x412 y 1280x720**, canvas no vacío mediante lectura de píxeles, HUD/controles dentro del viewport, triple contacto nativo movimiento/disparo/Dash, cancelación, pausa/rotación, tienda, reintento y teclado/ratón desktop. Sin errores de página. Capturas móvil y escritorio inspeccionadas: enemigos sin barras individuales y barra principal de boss visible.
+- Combate táctil reproducible: Sheriff de **1250 HP derrotado**, **93 disparos**, **5 Dash**, jugador con **64 HP** al finalizar; sin alterar estadísticas ni aplicar daño/curación directa. Pasos de simulación controlados, no benchmark de FPS ni evaluación humana de ergonomía.
+- Persecución probada con simulación del EnemyManager sobre la roca real `Rock:90`: la cruza sin desvío, vibración lateral ni rutas A* activas. Se mantienen casos de rodear muros, no penetrar estructuras y disparar al recuperar línea de visión. No se presenta esto como aceptación manual de navegación continua.
+- No se ha certificado Android/iPhone real ni rendimiento sostenido. Evidencias de esta ejecución en `%TEMP%/dust-hitbox-rework`, sin sobrescribir las capturas M1 anteriores.
+
+Reproducción desde la raíz del proyecto, con Vite en el puerto 5174:
+
+```powershell
+npx --yes --package playwright -c "node tests/mobile-overhaul.integration.mjs $env:TEMP/dust-hitbox-rework"
+npm run build
+```
+
+### Archivos afectados
+
+- Configuración: [collision.config.ts](src/config/collision.config.ts), [enemies.config.ts](src/config/enemies.config.ts), [bosses.config.ts](src/config/bosses.config.ts).
+- Enemigos: [Enemy.ts](src/enemies/Enemy.ts), [Enemy.types.ts](src/enemies/Enemy.types.ts), [EnemyManager.ts](src/enemies/EnemyManager.ts), [EnemyVisual.ts](src/enemies/EnemyVisual.ts).
+- Combate y bosses: [Combat.types.ts](src/combat/Combat.types.ts), [ProjectileSystem.ts](src/combat/ProjectileSystem.ts), [Boss.ts](src/bosses/Boss.ts), [Boss.types.ts](src/bosses/Boss.types.ts).
+- Mundo y depuración: [World.ts](src/world/World.ts), [Game.ts](src/core/Game.ts), [GameDebugVisualization.ts](src/core/GameDebugVisualization.ts), [PlayerHUD.ts](src/ui/PlayerHUD.ts).
+- Comprobaciones: [Enemy.check.ts](src/enemies/Enemy.check.ts), [EnemyNavigation.check.ts](src/enemies/EnemyNavigation.check.ts), [Combat.check.ts](src/combat/Combat.check.ts), [Boss.check.ts](src/bosses/Boss.check.ts), [World.check.ts](src/world/World.check.ts), [GameDebugVisualization.check.ts](src/core/GameDebugVisualization.check.ts).
+- Integración: [mobile-overhaul.integration.mjs](tests/mobile-overhaul.integration.mjs). Este roadmap registra implementación, resultados y límites de validación.
 
 ## M1 — Mobile Overhaul
 
