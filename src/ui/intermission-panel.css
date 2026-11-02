@@ -38,3 +38,12 @@
   .intermission__footer { align-items: stretch; flex-direction: column; }
   .intermission__footer button { width: 100%; }
 }
+
+.mobile-layout .intermission {
+  padding: calc(8px + env(safe-area-inset-top)) calc(12px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) calc(12px + env(safe-area-inset-left));
+  touch-action: pan-y;
+}
+.mobile-layout .intermission__panel { max-height: 100%; padding: 14px; touch-action: pan-y; overscroll-behavior: contain; }
+.mobile-layout .intermission button { min-height: 44px; min-width: 80px; font-size: 12px; touch-action: manipulation; }
+.mobile-layout .intermission__row strong { font-size: 13px; }
+.mobile-layout .intermission__row span, .mobile-layout .intermission__row small { font-size: 11px; }

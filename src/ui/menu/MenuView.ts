@@ -86,6 +86,11 @@ export class MenuView {
         <label class="settings-row"><span>Calidad grafica</span><select data-setting="graphicsQuality"><option value="low" ${settings.graphicsQuality === 'low' ? 'selected' : ''}>Baja</option><option value="medium" ${settings.graphicsQuality === 'medium' ? 'selected' : ''}>Media</option><option value="high" ${settings.graphicsQuality === 'high' ? 'selected' : ''}>Alta</option></select></label>
         ${this.rangeSetting('Sensibilidad de apuntado', 'aimSensitivity', (settings.aimSensitivity - 0.25) / 1.75, '0', '1', '0.01')}
         <label class="settings-row"><span>Controles tactiles</span><input type="checkbox" data-setting="showTouchControls" ${settings.showTouchControls ? 'checked' : ''}></label>
+        ${this.mobileRange('Tamano del joystick', 'joystickSize', settings.joystickSize, 96, 156, 2, 'px')}
+        ${this.mobileRange('Opacidad tactil', 'touchOpacity', settings.touchOpacity, 0.3, 1, 0.05)}
+        ${this.mobileRange('Sensibilidad tactil', 'touchAimSensitivity', settings.touchAimSensitivity, 0.5, 2, 0.05)}
+        ${this.mobileRange('Zona muerta tactil', 'touchDeadzone', settings.touchDeadzone, 0.05, 0.35, 0.01)}
+        ${this.mobileRange('Zoom movil', 'mobileZoom', settings.mobileZoom, 0.75, 1.5, 0.05)}
       </section>
     `)
     this.updateDifficultyDescription(settings.difficulty)
@@ -133,6 +138,10 @@ export class MenuView {
 
   private rangeSetting(label: string, key: string, value: number, min = '0', max = '1', step = '0.01'): string {
     return `<label class="settings-row settings-row--range"><span>${label}<output data-setting-value="${key}">${key === 'aimSensitivity' ? (value * 1.75 + 0.25).toFixed(2) : Math.round(value * 100)}${key === 'aimSensitivity' ? '' : '%'}</output></span><input type="range" data-setting="${key}" min="${min}" max="${max}" step="${step}" value="${value}"></label>`
+  }
+
+  private mobileRange(label: string, key: string, value: number, min: number, max: number, step: number, unit = 'x'): string {
+    return `<label class="settings-row"><span>${label}<output data-setting-value="${key}" data-unit="${unit}">${value}${unit}</output></span><input type="range" data-setting="${key}" min="${min}" max="${max}" step="${step}" value="${value}"></label>`
   }
 
   private paintDesert(canvas: HTMLCanvasElement): void {
@@ -243,7 +252,7 @@ export class MenuView {
       const settingsValue = key === 'aimSensitivity' ? value * 1.75 + 0.25 : value
       this.actions.onSettings({ [key]: settingsValue } as Partial<GameSettings>)
       const output = this.root.querySelector<HTMLOutputElement>(`[data-setting-value="${key}"]`)
-      if (output) output.value = key === 'aimSensitivity' ? settingsValue.toFixed(2) : `${Math.round(settingsValue * 100)}%`
+      if (output) output.value = output.dataset.unit ? `${settingsValue.toFixed(2)}${output.dataset.unit}` : key === 'aimSensitivity' ? settingsValue.toFixed(2) : `${Math.round(settingsValue * 100)}%`
     } else {
       this.actions.onSettings({ [key]: input.value } as Partial<GameSettings>)
     }

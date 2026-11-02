@@ -118,3 +118,15 @@
 @media (prefers-reduced-motion: reduce) {
   .hud-resource__track > span { transition: none; }
 }
+
+.mobile-layout .player-hud {
+  top: calc(8px + env(safe-area-inset-top)); left: calc(12px + env(safe-area-inset-left));
+  right: auto; bottom: auto; width: 222px; font-size: 12px;
+}
+.mobile-layout .hud-telemetry { padding: 8px 10px; }
+.mobile-layout .hud-resource__label { font-size: 11px; margin-bottom: 4px; }
+.mobile-layout .hud-resource + .hud-resource { margin-top: 6px; }
+.mobile-layout .hud-resource__track { height: 8px; }
+.mobile-layout .hud-currency { font-size: 11px; margin-top: 6px; }
+.mobile-layout .hud-wave { margin-top: 6px; padding-top: 6px; font-size: 10px; }
+.mobile-layout .hud-abilities, .mobile-layout .hud-attributes { display: none; }

@@ -35,6 +35,7 @@ import { PauseOverlay, type PauseReason } from '../ui/PauseOverlay'
 import { resolveDifficulty, type DifficultyMultipliers } from '../config/difficulty.config'
 import { ArcVoltaicAbility, EmergencyShieldAbility, equipReserveAuxiliary, FrostPulseAbility } from '../abilities/CoopAbilities'
 import type { SkillLoadout } from '../abilities/SkillProgressStore'
+import { CAMERA_CONFIG, getCameraViewHeight, isTouchDevice } from '../config/camera.config'
 
 export interface GameEndResult {
   readonly kind: 'game-over' | 'mission-complete'
@@ -59,7 +60,7 @@ export interface GameOptions {
 export class Game {
   private readonly scene = new THREE.Scene()
   private readonly camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 180)
-  private readonly renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' })
+  private readonly renderer = new THREE.WebGLRenderer({ antialias: !isTouchDevice(), powerPreference: 'high-performance' })
   private readonly input = new InputManager()
   private readonly world: World
   private readonly player = new Player()
@@ -72,6 +73,8 @@ export class Game {
   private readonly controller: PlayerController
   private readonly hud: PlayerHUD
   private readonly target = new THREE.Vector3(0, 0, 0)
+  private readonly cameraFocus = new THREE.Vector3()
+  private readonly bossFocusOffset = new THREE.Vector3()
   private readonly movementStart = new THREE.Vector3()
   private readonly cameraOffset = new THREE.Vector3(26, 34, 32)
   private readonly events: GameEventBus
@@ -98,6 +101,7 @@ export class Game {
   private running = false
   private paused = false
   private pauseReason: PauseReason = 'user'
+  private orientationPreviousPause: PauseReason | null = null
   private disposed = false
   private activeDifficulty: DifficultyMultipliers
   private pendingDifficulty: DifficultyMultipliers
@@ -117,6 +121,7 @@ export class Game {
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping
     this.renderer.toneMappingExposure = 1.2
     this.renderer.domElement.setAttribute('aria-label', 'DUST & NEON: escenario western alienigena en 3D')
+    container.classList.toggle('mobile-layout', isTouchDevice())
     container.append(this.renderer.domElement)
     setupLighting(this.scene, this.settings.graphicsQuality)
     this.scene.add(this.world.root, this.player.root)
@@ -167,6 +172,9 @@ export class Game {
     this.applyPendingDifficulty()
     if (this.events) this.unsubscribeEvents = this.events.subscribe(this.onGameEvent)
     window.addEventListener('resize', this.resize)
+    window.visualViewport?.addEventListener('resize', this.resize)
+    document.addEventListener('fullscreenchange', this.resize)
+    window.addEventListener('blur', this.onBlur)
     document.addEventListener('visibilitychange', this.onVisibilityChange)
     this.updateOrientationPause()
   }
@@ -181,9 +189,20 @@ export class Game {
     this.renderer.shadowMap.type = settings.graphicsQuality === 'high' ? THREE.VSMShadowMap : THREE.PCFShadowMap
     this.world.setGraphicsQuality(settings.graphicsQuality)
     this.visualEffects.setGraphicsQuality(settings.graphicsQuality)
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, profile.pixelRatio))
-    this.visualEffects.setWorldToPixelScale(window.innerHeight / Math.max(1, this.camera.top - this.camera.bottom) * this.renderer.getPixelRatio())
+    this.scene.traverse((object) => {
+      if (!(object instanceof THREE.DirectionalLight)) return
+      if (object.position.y < 30) return
+      object.castShadow = profile.shadows
+      const size = Math.max(1, profile.shadowMapSize)
+      if (object.shadow.mapSize.x !== size) {
+        object.shadow.map?.dispose()
+        object.shadow.map = null
+        object.shadow.mapSize.set(size, size)
+      }
+    })
     this.setTouchControlsEnabled(settings.showTouchControls)
+    this.touchControls?.applySettings(settings)
+    this.resize()
   }
 
   start(): void {
@@ -240,8 +259,15 @@ export class Game {
     } else if (!acceptsInput) {
       this.distanceSinceDust = 0
     }
-    this.target.lerp(this.player.position, 1 - Math.exp(-6 * deltaTime))
-    this.updateCamera()
+    this.cameraFocus.copy(this.player.position)
+    const cameraBoss = this.bossManager.currentBoss
+    if (isTouchDevice() && cameraBoss && !cameraBoss.isDefeated) {
+      this.bossFocusOffset.subVectors(cameraBoss.root.position, this.player.position).multiplyScalar(CAMERA_CONFIG.bossFocusWeight)
+      this.bossFocusOffset.clampLength(0, CAMERA_CONFIG.bossMaximumFocusOffset)
+      this.cameraFocus.add(this.bossFocusOffset)
+    }
+    this.target.lerp(this.cameraFocus, 1 - Math.exp(-6 * deltaTime))
+    this.updateCamera(deltaTime)
     if (acceptsInput) this.controller.updateAim()
     if (this.player.stats.isAlive && (this.waves.state === 'combat' || this.campaign?.runsBoss)) this.enemies.update(deltaTime)
     if (!this.player.stats.isAlive) {
@@ -299,9 +325,16 @@ export class Game {
     else if (this.campaign?.state === 'victory' || !this.campaign && this.waves.getSnapshot().runComplete) this.finishRun('mission-complete')
   }
 
-  private updateCamera(): void {
+  private updateCamera(deltaTime = 0): void {
     this.camera.position.copy(this.target).add(this.cameraOffset)
     this.camera.lookAt(this.target)
+    const desiredZoom = isTouchDevice() && this.bossManager.active ? 1 / CAMERA_CONFIG.bossHeightMultiplier : 1
+    const zoom = THREE.MathUtils.lerp(this.camera.zoom, desiredZoom, deltaTime > 0 ? 1 - Math.exp(-4 * deltaTime) : 1)
+    if (Math.abs(zoom - this.camera.zoom) > 0.00001) {
+      this.camera.zoom = zoom
+      this.camera.updateProjectionMatrix()
+      this.visualEffects?.setWorldToPixelScale(this.renderer.domElement.clientHeight / Math.max(1, this.camera.top - this.camera.bottom) * zoom * this.renderer.getPixelRatio())
+    }
   }
 
   private applyPendingDifficulty(): void {
@@ -311,18 +344,20 @@ export class Game {
   }
 
   private readonly resize = (): void => {
-    const width = Math.max(window.innerWidth, 1)
-    const height = Math.max(window.innerHeight, 1)
+    const bounds = this.renderer.domElement.parentElement?.getBoundingClientRect()
+    const width = Math.max(bounds?.width ?? window.innerWidth, 1)
+    const height = Math.max(bounds?.height ?? window.innerHeight, 1)
     const aspect = width / height
-    const viewHeight = Math.max(34, 45 / aspect)
+    const viewHeight = getCameraViewHeight(width, height, isTouchDevice(), this.settings.mobileZoom)
     this.camera.left = -viewHeight * aspect / 2
     this.camera.right = viewHeight * aspect / 2
     this.camera.top = viewHeight / 2
     this.camera.bottom = -viewHeight / 2
     this.camera.updateProjectionMatrix()
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, getGraphicsProfile(this.settings.graphicsQuality).pixelRatio))
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, getGraphicsProfile(this.settings.graphicsQuality).pixelRatio, isTouchDevice() ? CAMERA_CONFIG.mobilePixelRatio : Infinity))
     this.renderer.setSize(width, height)
-    this.visualEffects.setWorldToPixelScale(height / viewHeight * this.renderer.getPixelRatio())
+    this.visualEffects.setWorldToPixelScale(height / viewHeight * this.camera.zoom * this.renderer.getPixelRatio())
+    this.touchControls?.reset()
     this.updateOrientationPause()
   }
 
@@ -332,6 +367,9 @@ export class Game {
     this.running = false
     this.renderer.setAnimationLoop(null)
     window.removeEventListener('resize', this.resize)
+    window.visualViewport?.removeEventListener('resize', this.resize)
+    document.removeEventListener('fullscreenchange', this.resize)
+    window.removeEventListener('blur', this.onBlur)
     document.removeEventListener('visibilitychange', this.onVisibilityChange)
     this.unsubscribeEvents?.()
     this.unsubscribeEvents = null
@@ -362,6 +400,7 @@ export class Game {
       if (object instanceof THREE.Light) object.dispose()
     })
     this.renderer.dispose()
+    this.renderer.domElement.parentElement?.classList.remove('mobile-layout')
     this.renderer.domElement.remove()
   }
 
@@ -369,6 +408,10 @@ export class Game {
     if (!document.hidden || this.disposed || this.endNotified) return
     this.input.reset()
     this.touchControls?.reset()
+    this.pause('hidden')
+  }
+
+  private readonly onBlur = (): void => {
     this.pause('hidden')
   }
 
@@ -393,17 +436,22 @@ export class Game {
   }
 
   private updateOrientationPause(): void {
-    if (!this.pauseOverlay || !this.settings.showTouchControls || this.disposed || this.endNotified) return
+    if (!this.pauseOverlay || this.disposed || this.endNotified) return
     if (this.isPortraitTouchViewport()) {
-      if (!this.paused || this.pauseReason !== 'orientation') this.pause('orientation')
+      if (!this.paused || this.pauseReason !== 'orientation') {
+        this.orientationPreviousPause = this.paused ? this.pauseReason : null
+        this.pause('orientation')
+      }
     } else if (this.paused && this.pauseReason === 'orientation') {
-      this.resume()
+      const previousPause = this.orientationPreviousPause
+      this.orientationPreviousPause = null
+      if (previousPause) this.pause(previousPause)
+      else this.resume()
     }
   }
 
   private isPortraitTouchViewport(): boolean {
-    return this.settings.showTouchControls && (window.innerHeight > window.innerWidth
-      || window.matchMedia('(orientation: portrait)').matches)
+    return isTouchDevice() && window.innerHeight > window.innerWidth
   }
 
   private readonly onGameEvent = (event: GameEvent): void => {
@@ -466,5 +514,6 @@ export class Game {
     this.touchControls = new TouchControls(this.renderer.domElement.parentElement ?? document.body, this.controller, abilities, {
       onPause: () => { if (this.paused) this.resume(); else this.pause('user') },
     })
+    this.touchControls.applySettings(this.settings)
   }
 }

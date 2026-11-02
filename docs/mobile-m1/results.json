@@ -1,0 +1,267 @@
+{
+  "viewports": [
+    {
+      "viewport": [
+        667,
+        375
+      ],
+      "canvas": [
+        667,
+        375
+      ],
+      "dpr": 1,
+      "colors": 16,
+      "calls": 421,
+      "triangles": 18692,
+      "move": {
+        "x": 16,
+        "y": 235,
+        "width": 124,
+        "height": 124
+      },
+      "aim": {
+        "x": 527,
+        "y": 235,
+        "width": 124,
+        "height": 124
+      },
+      "dash": {
+        "x": 599,
+        "y": 167,
+        "width": 52,
+        "height": 52
+      },
+      "hud": {
+        "x": 12,
+        "y": 8,
+        "width": 222,
+        "height": 112
+      },
+      "boss": {
+        "x": 248,
+        "y": 8,
+        "width": 303,
+        "height": 64.1875
+      }
+    },
+    {
+      "viewport": [
+        844,
+        390
+      ],
+      "canvas": [
+        844,
+        390
+      ],
+      "dpr": 1,
+      "colors": 16,
+      "calls": 447,
+      "triangles": 19576,
+      "move": {
+        "x": 16,
+        "y": 250,
+        "width": 124,
+        "height": 124
+      },
+      "aim": {
+        "x": 704,
+        "y": 250,
+        "width": 124,
+        "height": 124
+      },
+      "dash": {
+        "x": 776,
+        "y": 182,
+        "width": 52,
+        "height": 52
+      },
+      "hud": {
+        "x": 12,
+        "y": 8,
+        "width": 222,
+        "height": 112
+      },
+      "boss": {
+        "x": 248,
+        "y": 8,
+        "width": 480,
+        "height": 64.1875
+      }
+    },
+    {
+      "viewport": [
+        932,
+        430
+      ],
+      "canvas": [
+        932,
+        430
+      ],
+      "dpr": 1,
+      "colors": 16,
+      "calls": 446,
+      "triangles": 19536,
+      "move": {
+        "x": 16,
+        "y": 290,
+        "width": 124,
+        "height": 124
+      },
+      "aim": {
+        "x": 792,
+        "y": 290,
+        "width": 124,
+        "height": 124
+      },
+      "dash": {
+        "x": 864,
+        "y": 222,
+        "width": 52,
+        "height": 52
+      },
+      "hud": {
+        "x": 12,
+        "y": 8,
+        "width": 222,
+        "height": 112
+      },
+      "boss": {
+        "x": 248,
+        "y": 8,
+        "width": 568,
+        "height": 64.1875
+      }
+    },
+    {
+      "viewport": [
+        915,
+        412
+      ],
+      "canvas": [
+        915,
+        412
+      ],
+      "dpr": 1,
+      "colors": 15,
+      "calls": 452,
+      "triangles": 19588,
+      "move": {
+        "x": 16,
+        "y": 272,
+        "width": 124,
+        "height": 124
+      },
+      "aim": {
+        "x": 775,
+        "y": 272,
+        "width": 124,
+        "height": 124
+      },
+      "dash": {
+        "x": 847,
+        "y": 204,
+        "width": 52,
+        "height": 52
+      },
+      "hud": {
+        "x": 12,
+        "y": 8,
+        "width": 222,
+        "height": 112
+      },
+      "boss": {
+        "x": 248,
+        "y": 8,
+        "width": 551,
+        "height": 64.1875
+      }
+    },
+    {
+      "viewport": [
+        1280,
+        720
+      ],
+      "canvas": [
+        1280,
+        720
+      ],
+      "dpr": 1,
+      "colors": 16,
+      "calls": 421,
+      "triangles": 18692,
+      "move": {
+        "x": 16,
+        "y": 580,
+        "width": 124,
+        "height": 124
+      },
+      "aim": {
+        "x": 1140,
+        "y": 580,
+        "width": 124,
+        "height": 124
+      },
+      "dash": {
+        "x": 1212,
+        "y": 512,
+        "width": 52,
+        "height": 52
+      },
+      "hud": {
+        "x": 12,
+        "y": 8,
+        "width": 222,
+        "height": 112
+      },
+      "boss": {
+        "x": 248,
+        "y": 8,
+        "width": 916,
+        "height": 64.1875
+      }
+    }
+  ],
+  "checks": [
+    "43 touch-control checks passed",
+    "29 ability checks passed",
+    "32 combat checks passed",
+    "28 boss checks passed",
+    "10 app feature checks passed",
+    "9 campaign checks passed",
+    "43 full campaign game checks passed",
+    "1 Game lifecycle check passed",
+    "37 progression checks passed",
+    "1 Game progression integration check passed",
+    "12 player-death checks passed"
+  ],
+  "interactions": [
+    "Touch menus: campaign, settings, persisted zoom, infinite start, pause/resume, exit, fresh run",
+    "Native CDP contacts: analog move + fire + Dash; release only Dash; cancel all",
+    "Portrait pause, landscape resume, manual pause survives rotation, blur pauses",
+    "Touch shop: purchase, perk, continue; actual Game Over, touch retry, one fresh game canvas"
+  ],
+  "errors": [],
+  "bossCombat": {
+    "defeated": true,
+    "playerHealth": 100,
+    "initialBossHealth": 1250,
+    "remainingBossHealth": 0,
+    "shots": 97,
+    "simulatedSeconds": 48.300000000000004,
+    "dashCount": 5,
+    "assisted": false,
+    "note": "Bot touch PointerEvents; normal player/weapon/boss stats; no direct damage or healing. Rendering skipped between deterministic simulation steps, not an FPS benchmark."
+  },
+  "desktop": {
+    "position": [
+      1.2658702809902174,
+      -0.03,
+      4.865686499680269
+    ],
+    "firing": true,
+    "shots": 2,
+    "height": 34,
+    "zoom": 1,
+    "controls": "none"
+  }
+}

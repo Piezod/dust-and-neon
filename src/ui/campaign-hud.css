@@ -97,3 +97,13 @@
   .campaign-hud__copy { font-size: 11px; }
   .campaign-hud__boss { top: 8px; }
 }
+
+.mobile-layout .campaign-hud__boss {
+  top: calc(8px + env(safe-area-inset-top)); left: calc(248px + env(safe-area-inset-left));
+  right: calc(116px + env(safe-area-inset-right)); width: auto; transform: none; padding: 8px;
+}
+.mobile-layout .campaign-hud__boss-name { font-size: 12px; }
+.mobile-layout .campaign-hud__boss-phase { font-size: 11px; margin: 4px 0 6px; }
+.mobile-layout .campaign-hud__chapter { top: 24%; width: min(460px, calc(100% - 48px)); padding: 10px 12px; }
+.mobile-layout .campaign-hud__title { font-size: 21px; }
+.mobile-layout .campaign-hud__copy { font-size: 12px; }

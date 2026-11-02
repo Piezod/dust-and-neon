@@ -5,6 +5,24 @@ export class InputManager {
   private readonly movementKeys = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD'])
   private virtualHorizontal = 0
   private virtualVertical = 0
+  readonly touchAim = { x: 0, y: 0, active: false, firing: false }
+  private readonly requestedAbilities = new Set<string>()
+
+  setTouchAim(x: number, y: number, firing: boolean): void {
+    this.touchAim.x = x
+    this.touchAim.y = y
+    this.touchAim.active = Math.hypot(x, y) > 0
+    this.touchAim.firing = firing && this.touchAim.active
+  }
+
+  requestAbility(id: string): void {
+    this.requestedAbilities.add(id)
+  }
+
+  consumeAbility(id: string, inputCode: string): boolean {
+    const touch = this.requestedAbilities.delete(id)
+    return this.consumePressed(inputCode) || touch
+  }
 
   constructor(keyboardTarget: EventTarget = window) {
     this.keyboardTarget = keyboardTarget
@@ -58,6 +76,8 @@ export class InputManager {
     this.justPressed.clear()
     this.virtualHorizontal = 0
     this.virtualVertical = 0
+    this.setTouchAim(0, 0, false)
+    this.requestedAbilities.clear()
   }
 
   dispose(): void {

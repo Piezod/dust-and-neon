@@ -48,6 +48,8 @@ export class SettingsStore {
       typeof value === 'number' && Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : current
     const quality: unknown = candidate.graphicsQuality
     const sensitivity = candidate.aimSensitivity
+    const bounded = (value: unknown, current: number, minimum: number, maximum: number): number =>
+      typeof value === 'number' && Number.isFinite(value) ? Math.min(maximum, Math.max(minimum, value)) : current
     return {
       masterVolume: volume(candidate.masterVolume, fallback.masterVolume),
       musicVolume: volume(candidate.musicVolume, fallback.musicVolume),
@@ -58,6 +60,11 @@ export class SettingsStore {
         ? Math.min(2, Math.max(0.25, sensitivity))
         : fallback.aimSensitivity,
       showTouchControls: typeof candidate.showTouchControls === 'boolean' ? candidate.showTouchControls : fallback.showTouchControls,
+      joystickSize: bounded(candidate.joystickSize, fallback.joystickSize, 96, 156),
+      touchOpacity: bounded(candidate.touchOpacity, fallback.touchOpacity, 0.3, 1),
+      touchAimSensitivity: bounded(candidate.touchAimSensitivity, fallback.touchAimSensitivity, 0.5, 2),
+      touchDeadzone: bounded(candidate.touchDeadzone, fallback.touchDeadzone, 0.05, 0.35),
+      mobileZoom: bounded(candidate.mobileZoom, fallback.mobileZoom, 0.75, 1.5),
       difficulty: sanitizeDifficultyProfile(candidate.difficulty ?? fallback.difficulty),
       customDifficulty: sanitizeCustomDifficulty({ ...fallback.customDifficulty, ...candidate.customDifficulty }),
     }

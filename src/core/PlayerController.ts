@@ -18,9 +18,9 @@ export class PlayerController {
   private readonly aimPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
   private readonly aimPoint = new THREE.Vector3()
   private readonly stoppedDirection = new THREE.Vector3()
+  private readonly cameraBackward = new THREE.Vector3()
   private pointerActive = false
   private firing = false
-  private virtualFiring = false
   private gameplayEnabled = true
   private activePointerId: number | null = null
   private aimSensitivity = 1
@@ -37,6 +37,7 @@ export class PlayerController {
     canvas.addEventListener('pointerdown', this.onPointerDown)
     canvas.addEventListener('pointermove', this.onPointerMove)
     canvas.addEventListener('pointerleave', this.clearPointer)
+    canvas.addEventListener('lostpointercapture', this.onPointerCancel)
     window.addEventListener('pointerup', this.onPointerUp)
     window.addEventListener('pointercancel', this.onPointerCancel)
     window.addEventListener('blur', this.clearInput)
@@ -56,9 +57,9 @@ export class PlayerController {
     this.forward.normalize()
     this.right.crossVectors(this.forward, this.camera.up).normalize()
     this.direction.copy(this.right).multiplyScalar(horizontal).addScaledVector(this.forward, vertical)
-    if (this.direction.lengthSq() > 0) this.direction.normalize()
+    if (this.direction.lengthSq() > 1) this.direction.normalize()
     for (const binding of this.player.abilities.getInputBindings()) {
-      if (this.input.consumePressed(binding.inputCode)) {
+      if (this.input.consumeAbility(binding.id, binding.inputCode)) {
         const result = this.player.abilities.tryActivate(binding.id, {
           movementDirection: this.player.resolveMovementDirection(this.direction),
         })
@@ -69,7 +70,22 @@ export class PlayerController {
   }
 
   updateAim(): void {
-    if (!this.gameplayEnabled || !this.player.stats.isAlive || !this.pointerActive) return
+    if (!this.gameplayEnabled || !this.player.stats.isAlive) return
+    const touch = this.input.touchAim
+    if (touch.active) {
+      this.camera.updateMatrixWorld()
+      const elements = this.camera.matrixWorld.elements
+      this.right.set(elements[0]!, elements[1]!, elements[2]!)
+      this.forward.set(elements[4]!, elements[5]!, elements[6]!)
+      this.direction.copy(this.right).multiplyScalar(touch.x).addScaledVector(this.forward, touch.y)
+      this.cameraBackward.set(elements[8]!, elements[9]!, elements[10]!)
+      this.direction.addScaledVector(this.cameraBackward, -this.direction.y / elements[9]!)
+      this.direction.y = 0
+      this.aimPoint.copy(this.player.position).addScaledVector(this.direction.normalize(), 20)
+      this.player.facePoint(this.aimPoint)
+      return
+    }
+    if (!this.pointerActive) return
     const bounds = this.canvas.getBoundingClientRect()
     if (bounds.width === 0 || bounds.height === 0) return
     this.cursor.set(((this.pointer.x - bounds.left) / bounds.width * 2 - 1) * this.aimSensitivity, (1 - (this.pointer.y - bounds.top) / bounds.height * 2) * this.aimSensitivity)
@@ -79,7 +95,7 @@ export class PlayerController {
   }
 
   get isFiring(): boolean {
-    return (this.firing || this.virtualFiring) && this.gameplayEnabled && this.player.stats.isAlive && !this.player.isStaggered
+    return (this.firing || this.input.touchAim.firing) && this.gameplayEnabled && this.player.stats.isAlive && !this.player.isStaggered
   }
 
   setAimSensitivity(value: number): void {
@@ -90,23 +106,16 @@ export class PlayerController {
     this.input.setVirtualMovement(horizontal, vertical)
   }
 
-  setTouchAim(clientX: number, clientY: number, firing: boolean): void {
-    this.pointer.set(clientX, clientY)
-    this.pointerActive = true
-    this.virtualFiring = firing
+  setTouchAim(horizontal: number, vertical: number, firing: boolean): void {
+    this.input.setTouchAim(horizontal, vertical, firing)
   }
 
   clearTouchAim(): void {
-    this.virtualFiring = false
-    this.pointerActive = false
+    this.input.setTouchAim(0, 0, false)
   }
 
   activateAbility(id: string): void {
-    if (this.player.isStaggered) return
-    const result = this.player.abilities.tryActivate(id, {
-      movementDirection: this.player.resolveMovementDirection(this.direction),
-    })
-    if (result.activated) this.emitAbilityActivated(id)
+    if (this.gameplayEnabled && !this.player.isStaggered) this.input.requestAbility(id)
   }
 
   private emitAbilityActivated(abilityId: string): void {
@@ -129,7 +138,7 @@ export class PlayerController {
 
   cancelAttackInput(): void {
     this.firing = false
-    this.virtualFiring = false
+    this.clearTouchAim()
     if (this.activePointerId !== null && this.canvas.hasPointerCapture?.(this.activePointerId)) {
       try {
         this.canvas.releasePointerCapture(this.activePointerId)
@@ -150,6 +159,7 @@ export class PlayerController {
   }
 
   private readonly onPointerDown = (event: PointerEvent): void => {
+    if (event.pointerType === 'touch') return
     if (!this.gameplayEnabled || !this.player.stats.isAlive || event.button !== 0 || !event.isPrimary) return
     this.updatePointer(event)
     this.firing = true
@@ -162,6 +172,7 @@ export class PlayerController {
   }
 
   private readonly onPointerMove = (event: PointerEvent): void => {
+    if (event.pointerType === 'touch') return
     this.updatePointer(event)
   }
 
@@ -174,8 +185,8 @@ export class PlayerController {
     if (this.activePointerId === event.pointerId) this.cancelAttackInput()
   }
 
-  private readonly onPointerCancel = (): void => {
-    this.cancelAttackInput()
+  private readonly onPointerCancel = (event: PointerEvent): void => {
+    if (event.pointerId === this.activePointerId) this.cancelAttackInput()
   }
 
   private readonly clearInput = (): void => {
@@ -188,6 +199,7 @@ export class PlayerController {
     this.canvas.removeEventListener('pointermove', this.onPointerMove)
     this.canvas.removeEventListener('pointerdown', this.onPointerDown)
     this.canvas.removeEventListener('pointerleave', this.clearPointer)
+    this.canvas.removeEventListener('lostpointercapture', this.onPointerCancel)
     window.removeEventListener('pointerup', this.onPointerUp)
     window.removeEventListener('pointercancel', this.onPointerCancel)
     window.removeEventListener('blur', this.clearInput)

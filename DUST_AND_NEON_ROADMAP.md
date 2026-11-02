@@ -1,6 +1,6 @@
 # Dust & Neon — Roadmap de desarrollo del núcleo roguelike
 
-**Versión:** 1.0 · **Estado:** Fases 4A–4D validadas por el usuario; 4E implementada y pendiente de validación visual.
+**Versión:** 1.0 · **Estado:** Fases 4A–4D validadas por el usuario; 4E implementada y pendiente de validación visual. Mobile Overhaul M1 implementada; pendiente de validación en dispositivo real.
 
 > Este documento es la fuente de planificación para GitHub Copilot. Antes de cada fase, inspecciona el repositorio real. No marques una tarea como completada sin cambios verificables, pruebas ejecutadas y validación manual del usuario.
 
@@ -56,10 +56,31 @@ Game / Scene composition root
 | 4D · Oleadas | Spawns progresivos y fin de oleada | ✅ Validada por el usuario |
 | 4E · Mejoras | Pantalla entre oleadas, oro, upgrades y perks | 🟨 Implementada; pendiente de validación visual del usuario |
 | 4F · Extensibilidad | Segundo enemigo, ataques alternativos y balance | 🟨 Implementada; pendiente de validación visual del usuario |
+| M1 · Mobile Overhaul | Cámara móvil, twin-stick, multitouch, Dash, HUD y menús táctiles | Implementada; pendiente de validación en Android/iPhone reales |
 
 Para cada fase, Copilot debe actualizar la tabla y checklist **solo tras** completar los criterios de aceptación y recibir confirmación.
 
 ---
+
+## M1 — Mobile Overhaul
+
+Implementada el 2026-11-02. No implica certificación de rendimiento ni aceptación en teléfono físico.
+
+- [x] Auditar cámara/frustum, renderer/DPR, input, joysticks, disparo, HUD, menús y viewport.
+- [x] Cámara móvil independiente: 18.5 unidades verticales frente a 34 de PC, ancho mínimo adaptable, zoom persistente y composición ampliada durante bosses. Sin modificar colliders.
+- [x] Movimiento analógico con zona muerta, apuntado relativo al jugador a 360 grados y disparo mantenido con la cadencia existente.
+- [x] Propiedad independiente por pointerId, tres contactos, Dash en pointerdown, cancelación/capture/foco, pausa y reinicio sin entradas atascadas.
+- [x] Landscape prioritario, aviso y pausa en portrait, safe areas, canvas dinámico y fullscreen opcional sin forzar orientación.
+- [x] HUD móvil, tienda y menús utilizables mediante toque; avisos de logros sin interceptar controles.
+- [x] Persistir tamaño, opacidad, sensibilidad táctil, zona muerta, zoom móvil y calidad con SettingsStore.
+- [x] Perfil inicial móvil bajo, DPR limitado, MSAA desactivado; reutilizar límites existentes de efectos/luces sin reducir precisión del combate.
+- [x] Playwright/Edge con emulación táctil y capturas en 667×375, 844×390, 932×430, 915×412 y 1280×720. Checks WebGL no vacío y geometría de HUD/controles.
+- [x] Regresiones de habilidades, combate, bosses, campaña completa, progresión, muerte, ajustes y ciclo de partida.
+- [x] Bot de prueba derrota al Sheriff de Hierro de 1250 HP mediante eventos de joystick y Dash, sin alterar estadísticas ni aplicar daño directo. Simulación controlada, no medición de FPS ni prueba de ergonomía humana.
+- [ ] Completar un combate contra un boss usando exclusivamente toques en Android/Chrome e iPhone/Safari reales.
+- [ ] Medir FPS, temperatura, memoria y estabilidad prolongada en teléfonos de distintas gamas.
+
+Detalles, limitaciones, instrucciones y archivos: [docs/MOBILE_M1_VALIDATION.md](docs/MOBILE_M1_VALIDATION.md). Capturas y resultados reproducibles: [docs/mobile-m1/results.json](docs/mobile-m1/results.json).
 
 ## 4A — Combate básico: revólver y proyectiles
 

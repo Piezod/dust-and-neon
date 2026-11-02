@@ -5,6 +5,7 @@ import type { CampaignDefinition } from '../game-modes/GameMode.types'
 import { CampaignProgress } from '../game-modes/CampaignProgress'
 import { InfiniteRunRecordStore } from '../game-modes/InfiniteRunRecord'
 import { SettingsStore } from './SettingsStore'
+import { DEFAULT_GAME_SETTINGS } from '../core/GameSettings.types'
 
 class MemoryStorage implements Storage {
   private readonly values = new Map<string, string>()
@@ -27,8 +28,12 @@ export function runAppFeatureChecks(): string {
   const settings = new SettingsStore(storage)
   const updatedSettings = settings.update({ masterVolume: 1.5, aimSensitivity: 0.1, graphicsQuality: 'ultra' as 'high' })
   check(updatedSettings.masterVolume === 1 && updatedSettings.aimSensitivity === 0.25, 'Settings clamp numeric ranges')
-  check(updatedSettings.graphicsQuality === 'high', 'Unknown graphics quality falls back to the current setting')
+  check(updatedSettings.graphicsQuality === DEFAULT_GAME_SETTINGS.graphicsQuality, 'Unknown graphics quality falls back to the current device setting')
   check(new SettingsStore(storage).settings.masterVolume === 1, 'Settings persist across store instances')
+  settings.update({ joystickSize: 140, touchOpacity: 0.6, touchAimSensitivity: 1.25, touchDeadzone: 0.2, mobileZoom: 1.15 })
+  const reloadedMobile = new SettingsStore(storage).settings
+  check(reloadedMobile.joystickSize === 140 && reloadedMobile.touchOpacity === 0.6 && reloadedMobile.touchAimSensitivity === 1.25
+    && reloadedMobile.touchDeadzone === 0.2 && reloadedMobile.mobileZoom === 1.15, 'All mobile preferences persist in the existing store')
 
   const campaign: CampaignDefinition = {
     ...CAMPAIGN_DEFINITION,
